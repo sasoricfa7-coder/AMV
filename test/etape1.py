@@ -7,7 +7,7 @@ nom = input("Entrez votre nom d'affichage : ")
 while nom == "" :
     nom = input("Entrez votre nom d'affichage : ")
     
-mon_id = "Sasori-123" # Il permet aux autres de nous reconnaitre
+mon_id = "Boot-334" # Il permet aux autres de nous reconnaitre
 nom_final = nom + "|" + mon_id
 ip = None
 dernier_vu = tm.time()
@@ -67,5 +67,6 @@ def creer_sc() :
     s.setsockopt(sc.SOL_SOCKET, sc.SO_REUSEADDR, 1)
     s.setsockopt(sc.SOL_SOCKET, sc.SO_BROADCAST, 1)
     return s
+
 s = creer_sc()
 les_ouvriers()
