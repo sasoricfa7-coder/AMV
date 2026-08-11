@@ -1,0 +1,31 @@
+Fiche — Étape 1 : Découverte (PC, Python, console)
+Objectif
+
+Un appareil annonce sa présence sur le réseau local (le hotspot auquel il est connecté), et les autres appareils sur ce même réseau le détectent automatiquement et l'affichent dans une liste, avec mise à jour en continu (si un appareil disparaît, il doit sortir de la liste après un moment).
+
+Comportement attendu
+Au lancement, le programme envoie en broadcast UDP, toutes les X secondes (propose 3 secondes), un petit message annonçant : un nom d'affichage temporaire (en dur pour l'instant, ex: "Sasori-test") et un identifiant unique (en dur aussi pour l'instant, un simple texte aléatoire — la vraie clé publique viendra à l'Étape 2).
+En parallèle, le programme écoute en permanence sur ce même port UDP pour recevoir les annonces des autres.
+Chaque annonce reçue est stockée dans une liste locale avec l'heure de réception.
+Toutes les X secondes, le programme nettoie la liste : si un appareil n'a plus donné signe de vie depuis, disons, 10 secondes, il est retiré (on considère qu'il est parti).
+Le programme affiche dans la console, en continu ou à intervalle régulier, la liste des appareils actuellement "vus".
+Contraintes techniques à respecter
+Utilise le module socket standard de Python (pas de bibliothèque tierce pour cette étape).
+Il faut que l'envoi (annonce) et la réception (écoute) tournent en même temps sans se bloquer l'un l'autre — pense à threading (un thread pour émettre, un thread pour écouter).
+Un socket UDP doit être configuré en mode broadcast (il y a une option précise à activer sur le socket pour ça — cherche de ton côté, c'est un bon exercice, et je corrige si ça bloque).
+Choisis un port dédié à l'application (évite les ports déjà utilisés, genre au-dessus de 10000).
+Format du message de découverte (simple pour l'instant)
+
+Pas besoin de JSON pour cette étape, un texte simple séparé par un caractère spécial suffit, par exemple :
+
+nom|identifiant
+
+On complexifiera ce format à l'Étape 2 quand la vraie clé publique entrera en jeu.
+
+Ce que je veux voir quand tu as fini
+Le code de l'émetteur/annonceur
+Le code de l'écouteur
+Comment tu gères la liste des appareils vus et leur expiration
+Test à faire toi-même avant de me montrer le code
+
+Lance le programme sur deux terminaux différents en même temps sur ton PC (deux instances) avec des noms différents en dur, et vérifie que chacun voit l'autre apparaître, puis disparaître si tu fermes l'un des deux.
