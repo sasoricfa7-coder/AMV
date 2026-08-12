@@ -45,7 +45,7 @@ def ecouter() :
                     appareils_vus [L[0]] = chaque_appareil 
             else :
                 pass
-        except :
+        except Exception :
             pass        
 
 def les_ouvriers() :
@@ -72,9 +72,9 @@ def liste_présence() :
                     if (tm.time() - appareils_vus[i]["dernier_vu"]) >= 10 :
                         del appareils_vus[i]
                 print() # Ligne vide pour aérer l'affichage de la liste
-                tm.sleep(3)
+            tm.sleep(3)
                 
-    except :
+    except Exception :
         pass
     
 def emettre() :

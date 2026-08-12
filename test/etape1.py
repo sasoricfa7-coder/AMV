@@ -23,14 +23,13 @@ while nom == "" :
     nom = input("Entrez votre nom d'affichage : ")
     
 mon_id = sauvegarde_recharge() # Il permet aux autres de nous reconnaitre
-nom_final = nom + "|" + mon_id
+nom_final = mon_id + "|" + nom
 ip = None
 dernier_vu = tm.time()
-chaque_appareil = {"nom" : nom, "ip" : ip, "dernier_vu" : dernier_vu}
-appareils_vus = {mon_id : chaque_appareil}
+appareils_vus = {}
 
 def ecouter() :
-    global appareils_vus
+    global appareils_vus, mon_id
     s_ecoute = creer_sc()
     s_ecoute.bind(('', 12345))
     while True :
@@ -38,10 +37,15 @@ def ecouter() :
             donnee, adresse_ip = s_ecoute.recvfrom(1024)
             donnee = donnee.decode("utf-8")
             L = donnee.split("|")
-            chaque_appareil = {"nom" : L[0], "ip" : adresse_ip[0], "dernier_vu" : tm.time()}
-            with verrou :
-                appareils_vus [L[1]] = chaque_appareil 
-        except :
+            if len(L) >= 2 :
+                chaque_appareil = {"nom" : L[1], "ip" : adresse_ip[0], "dernier_vu" : tm.time()}
+                with verrou :
+                    if L[0] == mon_id :
+                        continue
+                    appareils_vus [L[0]] = chaque_appareil 
+            else :
+                pass
+        except Exception :
             pass        
 
 def les_ouvriers() :
@@ -57,21 +61,25 @@ def les_ouvriers() :
     
 def liste_présence() :
     global appareils_vus
-    while True :
-        with verrou :
-            for i in list(appareils_vus) :
-                print(i, end=" ")
-                for j in appareils_vus[i] :
-                    print(appareils_vus[i][j], end=" ")
+    try :
+        while True :
+            with verrou :
+                for i in list(appareils_vus) :
+                    print(i, end=" ")
+                    for j in appareils_vus[i] :
+                        print(appareils_vus[i][j], end=" ")
         
-                if (tm.time() - appareils_vus[i]["dernier_vu"]) >= 10 :
-                    del appareils_vus[i]
-            print() # Ligne vide pour aérer l'affichage de la liste
-
-        tm.sleep(3)
+                    if (tm.time() - appareils_vus[i]["dernier_vu"]) >= 10 :
+                        del appareils_vus[i]
+                print() # Ligne vide pour aérer l'affichage de la liste
+            tm.sleep(3)
+                
+    except Exception :
+        pass
     
 def emettre() :
     global nom_final
+    s = creer_sc()
     donnee = nom_final.encode('utf-8')
     adresse = '<broadcast>'
     port = 12345
@@ -85,5 +93,6 @@ def creer_sc() :
     s.setsockopt(sc.SOL_SOCKET, sc.SO_REUSEADDR, 1)
     s.setsockopt(sc.SOL_SOCKET, sc.SO_BROADCAST, 1)
     return s
-s = creer_sc()
+
 les_ouvriers()
+
