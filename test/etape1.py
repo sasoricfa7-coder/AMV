@@ -1,13 +1,28 @@
 import socket as sc
 import time as tm
 import threading as tr
+import secrets as sr
+import os
+
+def sauvegarde_recharge() :
+    mon_fichier = "id.txt"
+
+    if os.path.exists(mon_fichier) :
+        with open(mon_fichier, "r", encoding="utf-8") as f :
+            return f.read().strip()
+    else :
+        mon_id = sr.token_hex(8)
+        with open(mon_fichier, "w") as f :
+            f.write(mon_id)
+        return mon_id
+            
 
 verrou = tr.Lock()
 nom = input("Entrez votre nom d'affichage : ")
 while nom == "" :
     nom = input("Entrez votre nom d'affichage : ")
     
-mon_id = "Boot-334" # Il permet aux autres de nous reconnaitre
+mon_id = sauvegarde_recharge() # Il permet aux autres de nous reconnaitre
 nom_final = nom + "|" + mon_id
 ip = None
 dernier_vu = tm.time()
@@ -19,12 +34,15 @@ def ecouter() :
     s_ecoute = creer_sc()
     s_ecoute.bind(('', 12345))
     while True :
-        donnee, adresse_ip = s_ecoute.recvfrom(1024)
-        donnee = donnee.decode("utf-8")
-        L = donnee.split("|")
-        chaque_appareil = {"nom" : L[0], "ip" : adresse_ip[0], "dernier_vu" : tm.time()}
-        with verrou :
-            appareils_vus [L[1]] = chaque_appareil
+        try :
+            donnee, adresse_ip = s_ecoute.recvfrom(1024)
+            donnee = donnee.decode("utf-8")
+            L = donnee.split("|")
+            chaque_appareil = {"nom" : L[0], "ip" : adresse_ip[0], "dernier_vu" : tm.time()}
+            with verrou :
+                appareils_vus [L[1]] = chaque_appareil 
+        except :
+            pass        
 
 def les_ouvriers() :
     # Emeteur
@@ -67,6 +85,5 @@ def creer_sc() :
     s.setsockopt(sc.SOL_SOCKET, sc.SO_REUSEADDR, 1)
     s.setsockopt(sc.SOL_SOCKET, sc.SO_BROADCAST, 1)
     return s
-
 s = creer_sc()
 les_ouvriers()
