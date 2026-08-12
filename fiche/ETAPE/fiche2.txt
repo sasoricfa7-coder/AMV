@@ -1,0 +1,57 @@
+Fiche — Étape 2 : Clés RSA et échange de session
+Objectif
+
+Chaque appareil génère sa paire de clés RSA au premier lancement (comme l'ID, mais persistée séparément). Le message de découverte est enrichi pour transmettre la clé publique. Puis, quand un appareil veut initier une conversation avec un autre, il génère une clé AES aléatoire, la chiffre avec la clé publique RSA du destinataire, et la lui envoie — c'est cette clé AES qui servira ensuite à chiffrer tous les messages entre les deux.
+
+Bibliothèque à utiliser
+
+cryptography (à installer : pip install cryptography). Cherche du côté du module cryptography.hazmat.primitives.asymmetric.rsa pour la génération de clés, et cryptography.hazmat.primitives.serialization pour sauvegarder/charger les clés dans un fichier.
+
+Étape 2a — Génération et persistance des clés
+Au premier lancement, génère une paire de clés RSA (2048 bits, c'est un bon compromis sécurité/performance pour l'instant).
+Sauvegarde la clé privée dans un fichier séparé (private_key.pem) — jamais transmise, jamais dans les logs.
+Sauvegarde ou dérive la clé publique correspondante.
+Même logique que sauvegarde_recharge() : si les fichiers existent déjà, on les recharge au lieu de régénérer.
+Étape 2b — Enrichir le message de découverte
+
+Le format id|nom doit maintenant inclure la clé publique. Attention : une clé publique RSA en format PEM contient des retours à la ligne, ce qui va casser ton découpage par "|". Il faut l'encoder en une seule ligne — cherche du côté de base64 pour transformer les octets de la clé publique en texte sans retour à la ligne, insérable proprement dans ton message.
+
+Nouveau format proposé : id|nom|cle_publique_en_base64
+
+Pense à agrandir la taille du buffer de réception (recvfrom(1024)) — une clé RSA encodée va dépasser 1024 octets, il te faut plus de marge (essaie 4096).
+
+Quand tu reçois une annonce, stocke la clé publique décodée dans le dictionnaire appareils_vus, à côté du nom et de l'IP.
+
+Étape 2c — Envoi de la clé de session
+Choisis un port TCP dédié pour cet échange (différent du port UDP de découverte).
+Quand l'utilisateur choisit un appareil dans la liste pour lui parler :
+Génère une clé AES aléatoire de 32 octets (secrets.token_bytes(32)).
+Chiffre cette clé avec la clé publique RSA du destinataire (cherche encrypt avec le padding OAEP dans la doc de cryptography, c'est le standard recommandé, pas le chiffrement RSA "brut").
+Connecte-toi en TCP à l'IP de ce destinataire (récupérée depuis appareils_vus) sur le port dédié, et envoie la clé chiffrée.
+Garde cette clé AES en mémoire localement, associée à l'id du destinataire (par exemple dans un dictionnaire sessions = {id_destinataire: cle_aes}).
+Étape 2d — Réception de la clé de session
+Un thread qui écoute en TCP sur le port dédié.
+À la réception d'une clé chiffrée, déchiffre-la avec ta propre clé privée RSA.
+Stocke-la dans ton propre dictionnaire sessions, associée à l'id de l'émetteur.
+Ce que je veux voir
+Le code de génération/persistance des clés RSA
+Le nouveau format de découverte avec la clé publique
+L'envoi et la réception de la clé de session chiffrée
+Test à faire toi-même
+
+Lance deux instances, vérifie que chacune récupère bien la clé publique de l'autre via la découverte, puis simule l'envoi d'une session de l'une vers l'autre et vérifie (avec un print) que la clé AES déchiffrée côté récepteur est identique à celle générée côté émetteur.
+
+ok Mais sur ma seule machine ca doit marcher ?
+
+Évalué la faisabilité du broadcast UDP sur une seule machine
+Évalué la faisabilité du broadcast UDP sur une seule machine
+
+Oui, ça doit marcher sur ta seule machine, exactement comme pour l'Étape 1 (tu as déjà testé le broadcast avec deux terminaux sur le même PC et ça a fonctionné).
+
+Quelques précisions pour cette étape-ci :
+
+L'IP que tu vas recevoir sera 127.0.0.1 pour les deux instances (adresse de loopback), puisqu'elles tournent sur la même machine. C'est normal et pas un problème : ça veut juste dire que quand tu ouvriras la connexion TCP pour l'échange de clé de session, tu te connecteras à 127.0.0.1 sur le port dédié — ça fonctionne très bien en local.
+Attention au port TCP : comme tu vas avoir deux instances qui écoutent chacune en TCP sur le "port dédié" pour recevoir les clés de session, assure-toi que les deux processus peuvent bien écouter sur le même numéro de port sans conflit — normalement oui puisque ce sont deux processus séparés qui bind chacun sur leur propre socket local, mais si tu as un souci de type "Address already in use", dis-le-moi.
+Seul vrai test qui comptera plus tard : sur un vrai déploiement (deux téléphones sur un hotspot), les IP seront différentes (type 192.168.43.x), donc garde en tête que ton code ne doit jamais supposer que l'IP est fixe ou connue à l'avance — il doit toujours la lire depuis appareils_vus, comme tu le fais déjà. Tu es déjà sur la bonne voie pour ça.
+
+Vas-y, code cette étape, montre-moi le résultat.
