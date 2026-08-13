@@ -94,10 +94,16 @@ def ecouter_tcp() :
             connexion, adresse = s_tcp.accept()
             # On reçoit la clé chiffrée
             donnees_chiffrees = connexion.recv(4096) 
-            if donnees_chiffrees :
+            L = [donnees_chiffrees[:16], donnees_chiffrees[16:]]
+            if len(L) == 2 :
                 # On déchiffre avec notre clé privée RSA
-                cle_aes_recue = dechiffrer_aes(donnees_chiffrees, ma_cle_prive)
-                print(f"\n[TCP] Clé AES reçue avec succès depuis {adresse[0]} ! Taille : {len(cle_aes_recue)} octets.")
+                L[1] = dechiffrer_aes(L[1], ma_cle_prive)
+                cle_a_decoder = L[0]
+                L[0] = cle_a_decoder.decode("utf-8")
+
+                with verrou :
+                    sessions[L[0]] = L[1]
+                print(f"\n[TCP] Clé AES reçue avec succès de {L[0]} depuis {adresse[0]} ! Taille : {len(L[1])} octets.")
             connexion.close()
         except Exception as e :
             pass
@@ -126,7 +132,8 @@ def envoyer_cle_session(id_destinataire) :
         s_client.connect((ip_dest, 55555))
         
         # 4. Envoi de la clé chiffrée
-        s_client.sendall(cle_aes_chiffree)
+        id_coder = mon_id.encode("utf-8")
+        s_client.sendall((id_coder + cle_aes_chiffree))
         s_client.close()
         
         # 5. Stockage local de la clé AES dans les sessions
