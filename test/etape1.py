@@ -3,6 +3,7 @@ from cryptography.hazmat.primitives import serialization as seria
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 
+import sys
 import socket as sc
 import time as tm
 import threading as tr
@@ -83,10 +84,10 @@ def chiffrer_aes(cle_aes, cle_publique_b64) :
     return cle_chiffree
         
 def ecouter_tcp() :
-    global sessions, ma_cle_prive
+    global sessions, ma_cle_prive, port_optionnel
     s_tcp = sc.socket(sc.AF_INET, sc.SOCK_STREAM)
     s_tcp.setsockopt(sc.SOL_SOCKET, sc.SO_REUSEADDR, 1)
-    s_tcp.bind(('', 55555))
+    s_tcp.bind(('', port_optionnel))
     s_tcp.listen(5) 
 
     while True :
@@ -94,10 +95,15 @@ def ecouter_tcp() :
             connexion, adresse = s_tcp.accept()
             # On reçoit la clé chiffrée
             donnees_chiffrees = connexion.recv(4096) 
-            if donnees_chiffrees :
-                # On déchiffre avec notre clé privée RSA
-                cle_aes_recue = dechiffrer_aes(donnees_chiffrees, ma_cle_prive)
-                print(f"\n[TCP] Clé AES reçue avec succès depuis {adresse[0]} ! Taille : {len(cle_aes_recue)} octets.")
+            L = [donnees_chiffrees[:16], donnees_chiffrees[16:]]
+            # On déchiffre avec notre clé privée RSA
+            L[1] = dechiffrer_aes(L[1], ma_cle_prive)
+            cle_a_decoder = L[0]
+            L[0] = cle_a_decoder.decode("utf-8")
+
+            with verrou :
+                sessions[L[0]] = L[1]
+            print(f"\n[TCP] Clé AES reçue avec succès de {L[0]} depuis {adresse[0]} ! Taille : {len(L[1])} octets.")
             connexion.close()
         except Exception as e :
             pass
@@ -113,6 +119,7 @@ def envoyer_cle_session(id_destinataire) :
         info_appareil = appareils_vus[id_destinataire]
         ip_dest = info_appareil["ip"]
         cle_pub_b64 = info_appareil["Clé_publique"]
+        port_dest = int(info_appareil["port"])
 
     # 1. Génération de la clé AES aléatoire
     cle_aes = sr.token_bytes(32)
@@ -121,19 +128,20 @@ def envoyer_cle_session(id_destinataire) :
     cle_aes_chiffree = chiffrer_aes(cle_aes, cle_pub_b64)
     
     try :
-        # 3. Connexion TCP vers le port 55555 du destinataire
+        # 3. Connexion TCP vers le port spécifique du destinataire
         s_client = sc.socket(sc.AF_INET, sc.SOCK_STREAM)
-        s_client.connect((ip_dest, 55555))
+        s_client.connect((ip_dest, port_dest))
         
         # 4. Envoi de la clé chiffrée
-        s_client.sendall(cle_aes_chiffree)
+        id_coder = mon_id.encode("utf-8")
+        s_client.sendall((id_coder + cle_aes_chiffree))
         s_client.close()
         
         # 5. Stockage local de la clé AES dans les sessions
         with verrou :
             sessions[id_destinataire] = cle_aes
             
-        print(f"\n[TCP] Clé AES générée et envoyée avec succès à {info_appareil['nom']} ({ip_dest}) !")
+        print(f"\n[TCP] Clé AES générée et envoyée avec succès à {info_appareil['nom']} ({ip_dest}:{port_dest}) !")
         
     except Exception as e :
         print(f"\n[Erreur TCP] Impossible d'envoyer la clé : {e}")
@@ -149,7 +157,12 @@ ma_cle_prive = generation_rsa()
 ma_cle_publique = ma_cle_prive.public_key()
 ma_cle_publique_b64 = transforme_base_64(ma_cle_publique)
 
-nom_final = mon_id + "|" + nom + "|" + ma_cle_publique_b64
+port_optionnel = 55555
+if len(sys.argv) > 1 :
+    port_optionnel = int(sys.argv[1])
+
+# Correction : conversion du port en string pour la concaténation
+nom_final = mon_id + "|" + nom + "|" + ma_cle_publique_b64 + "|" + str(port_optionnel)
 ip = None
 dernier_vu = tm.time()
 appareils_vus = {} 
@@ -164,8 +177,8 @@ def ecouter() :
             donnee, adresse_ip = s_ecoute.recvfrom(4096)
             donnee = donnee.decode("utf-8")
             L = donnee.split("|")
-            if len(L) >= 3 :
-                chaque_appareil = {"nom" : L[1], "ip" : adresse_ip[0], "Clé_publique" : L[2], "dernier_vu" : tm.time()}
+            if len(L) >= 4 :
+                chaque_appareil = {"nom" : L[1], "ip" : adresse_ip[0], "Clé_publique" : L[2], "dernier_vu" : tm.time(), "port" : int(L[3])}
                 with verrou :
                     if L[0] == mon_id :
                         continue
@@ -176,13 +189,13 @@ def ecouter() :
             pass        
 
 def les_ouvriers() :
-    ouvrier_emeteur = tr.Thread(target=emettre)
+    ouvrier_emeteur = tr.Thread(target=emettre, daemon=True)
     ouvrier_emeteur.start()
-    ouvrier_recepteur = tr.Thread(target=ecouter)
+    ouvrier_recepteur = tr.Thread(target=ecouter, daemon=True)
     ouvrier_recepteur.start()
-    ouvrier_presence = tr.Thread(target=liste_présence)
+    ouvrier_presence = tr.Thread(target=liste_présence, daemon=True)
     ouvrier_presence.start()
-    ouvrier_tcp = tr.Thread(target=ecouter_tcp)
+    ouvrier_tcp = tr.Thread(target=ecouter_tcp, daemon=True)
     ouvrier_tcp.start()
     
 def liste_présence() :
@@ -217,6 +230,7 @@ def main():
     les_ouvriers()
     
     tm.sleep(1) 
+
     while True :
         print("\n--- MENU ---")
         print("1. Afficher les appareils connectés")
@@ -232,7 +246,7 @@ def main():
                         print("Aucun appareil détecté pour le moment.")
                     else :
                         for identifiant, info in appareils_vus.items() :
-                            print(f"ID: {identifiant} | Nom: {info['nom']} | IP: {info['ip']}")
+                            print(f"ID: {identifiant} | Nom: {info['nom']} | IP: {info['ip']} | Port: {info['port']}")
 
             case "2" :
                 identifiant = input("Entrez l'ID de l'appareil destinataire : ").strip()
