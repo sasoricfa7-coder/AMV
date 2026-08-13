@@ -1,3 +1,4 @@
+# AMV
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization as seria
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -8,7 +9,7 @@ import socket as sc
 import time as tm
 import threading as tr
 import secrets as sr
-import os
+import os   
 import base64 as b64
 
 def dechiffrer_aes(cle_aes_chiffree, ma_cle_privee) :
