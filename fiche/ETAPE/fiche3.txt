@@ -1,0 +1,44 @@
+Fiche — Étape 3 : messages texte chiffrés (160 caractères)
+Objectif
+
+Une fois qu'une session est établie entre deux appareils (clé AES partagée dans sessions), pouvoir s'envoyer un message texte, chiffré avec cette clé AES, avec une limite stricte de 160 caractères.
+
+Rappel important sur AES-GCM
+
+Tu vas utiliser cryptography.hazmat.primitives.ciphers.aead.AESGCM. Deux règles à respecter absolument :
+
+Il faut un nonce (nombre à usage unique, 12 octets recommandé pour GCM) à chaque chiffrement, généré avec secrets.token_bytes(12).
+Ne jamais réutiliser le même nonce avec la même clé AES — sinon la sécurité du chiffrement s'effondre complètement. Comme tu vas envoyer plusieurs messages avec la même clé de session, chaque appel de chiffrement doit générer un nouveau nonce.
+
+Le nonce n'est pas secret : il doit être envoyé en clair avec le message chiffré, le destinataire en a besoin pour déchiffrer.
+
+Étape 3a — Fonction de chiffrement d'un texte
+Vérifie d'abord que le texte ne dépasse pas 160 caractères ; si c'est le cas, refuse d'envoyer (affiche une erreur claire à l'utilisateur, ne coupe pas silencieusement le texte).
+Génère un nonce.
+Chiffre le texte (encodé en UTF-8) avec AESGCM(cle_session).encrypt(nonce, texte_en_octets, None).
+Le résultat de encrypt() contient déjà le tag d'authentification à la fin, tu n'as rien à gérer séparément pour ça.
+Étape 3b — Format du message envoyé
+
+Comme pour la clé de session, il te faut un moyen pour le récepteur de savoir qui envoie et de retrouver le nonce. Je te propose cette structure, dans cet ordre, avant le préfixe de taille que tu maîtrises déjà :
+
+mon_id (16 caractères) + nonce (12 octets) + texte_chiffré (le reste)
+Étape 3c — Envoi
+Vérifie d'abord qu'une session existe avec ce destinataire (if id_destinataire not in sessions) — sinon affiche une erreur invitant à établir une session d'abord (Étape 2).
+Connecte-toi en TCP au destinataire (même logique que envoyer_cle_session, tu peux réutiliser un port dédié aux messages, différent de celui de l'échange de clé, ou le même si tu préfères distinguer par le premier octet du message — à toi de choisir, mais reste cohérent).
+Envoie le message construit avec le préfixe de taille.
+Étape 3d — Réception
+Dans le thread d'écoute (nouveau, ou réutilisation de celui existant si tu distingues les types de paquets), découpe : les 16 premiers caractères = id émetteur, les 12 octets suivants = nonce, le reste = texte chiffré.
+Vérifie que tu as bien une session pour cet id émetteur (if id_emetteur not in sessions: ignore).
+Déchiffre avec AESGCM(cle_session).decrypt(nonce, texte_chiffre, None).
+Affiche le texte déchiffré à l'utilisateur.
+Point de vigilance
+
+AESGCM.decrypt() lève une exception si le message a été altéré ou si la clé/nonce ne correspond pas (c'est le rôle du tag d'authentification — ça protège contre la corruption ou la falsification). Entoure ce déchiffrement d'un try/except, et en cas d'échec, ignore le message plutôt que de planter le thread.
+
+Ce que je veux voir
+La fonction de chiffrement avec vérification de la limite de 160 caractères
+La fonction de déchiffrement avec gestion de l'échec
+L'envoi et la réception intégrés à ton menu (une nouvelle option "3. Envoyer un message texte" par exemple)
+Test à faire toi-même
+
+Envoie un message court entre deux instances, vérifie qu'il s'affiche correctement en clair côté récepteur. Essaie ensuite d'envoyer un texte de plus de 160 caractères et vérifie que ton programme le refuse proprement.
