@@ -93,20 +93,27 @@ def ecouter_tcp() :
     while True :
         try :
             connexion, adresse = s_tcp.accept()
-            # On reçoit la taille du message
-            taille_message = connexion.recv(4)
-            taille_message = int.from_bytes(taille_message, 'big')
-            donnees_chiffrees = ""
+            # 1. On reçoit la taille du message (4 octets)
+            taille_donnees = connexion.recv(4)
+            if not taille_donnees:
+                connexion.close()
+                continue
+            taille_message = int.from_bytes(taille_donnees, 'big')
 
-            for i in range(taille_message) :
-                donnees_chiffrees += connexion.recv(4096)
-            
-            """donnees_chiffrees = connexion.recv(4096) 
+            # 2. Boucle sécurisée pour accumuler exactement le nombre d'octets attendus
+            donnees_chiffrees = b""
+            while len(donnees_chiffrees) < taille_message :
+                morceau = connexion.recv(taille_message - len(donnees_chiffrees))
+                if not morceau:
+                    break
+                donnees_chiffrees += morceau
+
+            # 3. Traitement des données reçues
             L = [donnees_chiffrees[:16], donnees_chiffrees[16:]]
             # On déchiffre avec notre clé privée RSA
             L[1] = dechiffrer_aes(L[1], ma_cle_prive)
             cle_a_decoder = L[0]
-            L[0] = cle_a_decoder.decode("utf-8")"""
+            L[0] = cle_a_decoder.decode("utf-8")
 
             with verrou :
                 sessions[L[0]] = L[1]
@@ -140,14 +147,14 @@ def envoyer_cle_session(id_destinataire) :
         s_client = sc.socket(sc.AF_INET, sc.SOCK_STREAM)
         s_client.connect((ip_dest, port_dest))
         
-        # 4. Envoi de la clé chiffrée
+        # 4. Envoi de la taille puis du message complet
         id_coder = mon_id.encode("utf-8")
         message = id_coder + cle_aes_chiffree
         taille_message = len(message)
-        taille_message = taille_message.to_bytes(4, 'big')
+        taille_message_bytes = taille_message.to_bytes(4, 'big')
 
-        s_client.sendall((taille_message))
-        s_client.sendall((message))
+        s_client.sendall(taille_message_bytes)
+        s_client.sendall(message)
         s_client.close()
         
         # 5. Stockage local de la clé AES dans les sessions
@@ -175,7 +182,6 @@ port_optionnel = 55555
 if len(sys.argv) > 1 :
     port_optionnel = int(sys.argv[1])
 
-# Correction : conversion du port en string pour la concaténation
 nom_final = mon_id + "|" + nom + "|" + ma_cle_publique_b64 + "|" + str(port_optionnel)
 ip = None
 dernier_vu = tm.time()
