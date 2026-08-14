@@ -1,0 +1,53 @@
+Fiche — Étape 4 : relais à un seul saut
+Objectif
+
+Permettre à un message chiffré de transiter par un appareil intermédiaire (un relais) avant d'arriver à son vrai destinataire, en utilisant le TTL pour limiter le nombre de sauts. Pour cette étape, on se concentre uniquement sur la mécanique du relayage (construire l'enveloppe, la faire suivre, la reconnaître à l'arrivée) — pas encore sur la logique intelligente de "qui choisir comme relais" (ça, c'est l'Étape 5).
+
+Principe important à bien comprendre avant de coder
+
+Un relais ne déchiffre jamais le contenu qu'il transmet. Il ne lit que des informations en clair : à qui c'est destiné, combien de sauts il reste, et le type de paquet. Le contenu chiffré (que ce soit une clé de session ou un message texte) passe intact, sans y toucher.
+
+Nouveau type de paquet : l'enveloppe de relais (type 3)
+
+Structure du paquet, dans cet ordre :
+
+type (1 octet = 3) + dest_hash (16 caractères, id du VRAI destinataire final)
++ sender_hash (16 caractères, id de l'émetteur d'origine)
++ ttl (1 octet)
++ type_interne (1 octet, ex: 2 pour un message texte)
++ payload_interne (le reste — c'est exactement ce que tu mettrais déjà après le type dans un paquet normal, ex: nonce + texte chiffré)
+
+Remarque : payload_interne, c'est simplement le contenu que tu construis déjà aujourd'hui pour un message direct (nonce + texte chiffré pour le type 2). L'enveloppe de relais ne fait que l'entourer d'informations de routage supplémentaires.
+
+Étape 4a — Construire l'enveloppe (côté émetteur)
+
+Écris une fonction qui assemble ces champs dans l'ordre ci-dessus et retourne les octets complets (sans le préfixe de taille, que tu ajoutes ensuite comme d'habitude).
+
+Étape 4b — Envoyer via un relais choisi manuellement
+
+Pour cette étape, l'utilisateur choisit lui-même l'appareil relais dans le menu (pas de sélection automatique encore). Concrètement :
+
+L'utilisateur indique l'id du destinataire final ET l'id de l'appareil à utiliser comme relais.
+Le texte est chiffré normalement avec la session existante entre toi et le destinataire final (donc il faut qu'une session existe déjà entre vous deux, établie au préalable comme avant).
+Le résultat est emballé dans l'enveloppe de relais (avec dest_hash = le destinataire final, sender_hash = toi, ttl = une petite valeur pour ce test, par exemple 3).
+Le paquet est envoyé à l'IP et au port du relais, pas à ceux du destinataire final.
+Étape 4c — Traitement à la réception d'une enveloppe de relais (type 3)
+
+Dans ton match type_message, ajoute le cas 3, avec cette logique :
+
+Décode dest_hash. Si dest_hash == mon_id : le paquet est pour toi ! Dans ce cas, déballe type_interne et payload_interne et traite-les exactement comme si tu avais reçu ce paquet directement (réutilise ta logique existante du type 2 : retrouve la session avec sender_hash, déchiffre, affiche).
+Sinon (ce n'est pas pour toi, tu es un simple relais) :
+Décrémente le ttl de 1.
+Si le nouveau ttl est à 0 (ou négatif) → abandonne le paquet, affiche un message clair du genre "Paquet abandonné, TTL épuisé" (pas de notification d'échec pour l'instant, on ajoutera ça plus tard).
+Sinon, regarde si dest_hash est dans ton propre appareils_vus. Si oui → reconstruis l'enveloppe avec le nouveau ttl et renvoie-la à l'IP/port de ce destinataire. Si non → pour cette étape, abandonne simplement le paquet en affichant "Aucun chemin connu vers ce destinataire" (la vraie logique d'attente/mémorisation viendra à l'Étape 5).
+Ce que je veux voir
+La fonction qui construit l'enveloppe de relais
+Le nouveau cas 3 dans ton match, avec la distinction claire "c'est pour moi" vs "je relaie"
+L'option de menu pour envoyer un message en choisissant manuellement un relais
+Test à faire toi-même
+
+Lance trois instances (A, B, C). Établis d'abord une session directe entre A et C (comme avant, ils se voient tous sur le même réseau donc c'est possible). Puis, depuis A, envoie un message texte à C en passant volontairement par B comme relais (même si A pourrait le faire directement — le but ici est juste de vérifier que le mécanisme de relayage fonctionne correctement). Vérifie que :
+
+B affiche bien qu'il relaie un paquet qui n'est pas pour lui, et montre le TTL restant
+C reçoit bien le message et l'affiche en clair
+Si tu mets ttl = 1 au départ, le message doit être abandonné par B (puisqu'il tombera à 0 avant d'arriver) — vérifie que ce cas s'affiche bien aussi
