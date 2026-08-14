@@ -134,7 +134,7 @@ def ecouter_tcp() :
 
             connexion.close()
         except Exception as e :
-            pass
+            print(e)
 
 def envoyer_cle_session(id_destinataire) :
     global appareils_vus, sessions
@@ -160,14 +160,18 @@ def envoyer_cle_session(id_destinataire) :
         taille_message = len(message)
         taille_message_bytes = taille_message.to_bytes(4, 'big')
 
-        envoi_tout(port_dest, ip_dest, taille_message, taille_message_bytes)
-        
-        # 5. Stockage local de la clé AES dans les sessions
-        with verrou :
-            sessions[id_destinataire] = cle_aes
+        valide = envoi_tout(port_dest, ip_dest, taille_message_bytes, message)
+
+        if valide :
+            # 5. Stockage local de la clé AES dans les sessions
+            with verrou :
+                sessions[id_destinataire] = cle_aes
             
-        print(f"\n[TCP] Clé AES générée et envoyée avec succès à {info_appareil['nom']} ({ip_dest}:{port_dest}) !")
-        print(f"\n Clé : {cle_aes.hex()}")
+            print(f"\n[TCP] Clé AES générée et envoyée avec succès à {info_appareil['nom']} ({ip_dest}:{port_dest}) !")
+            print(f"\n Clé : {cle_aes.hex()}")
+            return valide
+        else :
+            return valide 
         
     except Exception as e :
         print(f"\n[Erreur TCP] Impossible d'envoyer la clé : {e}")
@@ -213,8 +217,8 @@ def ecouter() :
                     appareils_vus[L[0]] = chaque_appareil 
             else :
                 pass
-        except Exception :
-            pass        
+        except Exception as e  :
+            print(e)
 
 def les_ouvriers() :
     ouvrier_emeteur = tr.Thread(target=emettre, daemon=True)
@@ -235,7 +239,8 @@ def liste_présence() :
                     if (tm.time() - appareils_vus[i]["dernier_vu"]) >= 10 :
                         del appareils_vus[i]
             tm.sleep(3)
-    except Exception :
+    except Exception as e :
+        print(e)
         pass
     
 def emettre() :
@@ -269,6 +274,7 @@ def dechiffrer_message(nonce, texte_chiffre, cle_session) :
         return texte_dechiffre.decode("utf-8")
     except Exception as e :
         # En cas de corruption ou de mauvaise clé/nonce
+        print(e)
         return None     
 
 
@@ -289,12 +295,16 @@ def envoi_tout(port, ip, m1, m2="") :
                 s_client.sendall(m2) 
             s_client.close()
 
+            return True
+
         except Exception as e :
-            print("Echec d'envoi")
+            print(e)
+            return False
+            
 
 
 def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
-    global appareils_vus, sessions
+    global appareils_vus, sessions, mon_id
     id_destinataire = input("Entrez l'ID du destinaitaire : ").strip()
     with verrou :
         if id_destinataire not in appareils_vus :
@@ -308,14 +318,17 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
         message = input("Entrez votre message : ").strip()
 
     if id_destinataire not in sessions :
-        envoyer_cle_session(id_destinataire)
+        valide = envoyer_cle_session(id_destinataire)
+        if not valide :
+            print("Echec")
+            return
 
     with verrou :
         cle = sessions[id_destinataire]
 
     nonce, texte = chiffrer_message(message, cle)
 
-    tout = (b'\x02') + id_destinataire.encode("utf-8") + nonce + texte
+    tout = (b'\x02') + mon_id.encode("utf-8") + nonce + texte
         
     def renvoi_taille(tout) : # Je vais le garder malgré et aussi les sous fonctions m'aident à mieux me repérer
         taille_message = len(tout)
@@ -328,7 +341,10 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
         ip = appareils_vus[id_destinataire]["ip"]
         port = int(appareils_vus[id_destinataire]["port"])
 
-    envoi_tout(port, ip, taille , tout)
+    valide = envoi_tout(port, ip, taille , tout)
+
+    if not valide :
+        return
 
 
 
