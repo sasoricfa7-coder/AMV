@@ -1,14 +1,16 @@
+
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization as seria
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM as AES
 
 import sys
 import socket as sc
 import time as tm
 import threading as tr
 import secrets as sr
-import os
+import os   
 import base64 as b64
 
 def dechiffrer_aes(cle_aes_chiffree, ma_cle_privee) :
@@ -84,7 +86,7 @@ def chiffrer_aes(cle_aes, cle_publique_b64) :
     return cle_chiffree
         
 def ecouter_tcp() :
-    global sessions, ma_cle_prive, port_optionnel
+    global sessions, ma_cle_prive, port_optionnel, appareils_vus
     s_tcp = sc.socket(sc.AF_INET, sc.SOCK_STREAM)
     s_tcp.setsockopt(sc.SOL_SOCKET, sc.SO_REUSEADDR, 1)
     s_tcp.bind(('', port_optionnel))
@@ -108,33 +110,41 @@ def ecouter_tcp() :
                     break
                 donnees_chiffrees += morceau
 
-            # 3. Traitement des données reçues
-            L = [donnees_chiffrees[:16], donnees_chiffrees[16:]]
-            # On déchiffre avec notre clé privée RSA
-            L[1] = dechiffrer_aes(L[1], ma_cle_prive)
-            cle_a_decoder = L[0]
-            L[0] = cle_a_decoder.decode("utf-8")
+            type_message = int (donnees_chiffrees[0])
+            id_destinataire = (donnees_chiffrees[1:17]).decode("utf-8")
+            reste = donnees_chiffrees[17:]
 
-            with verrou :
-                sessions[L[0]] = L[1]
-            print(f"\n[TCP] Clé AES reçue avec succès de {L[0]} depuis {adresse[0]} ! Taille : {len(L[1])} octets.")
-            print(f"\n Clé : {L[1].hex()}")
+            match type_message : # Avec match l'ajout d'un nouveau type de donnée est facile
+
+                case 1 :
+                    cle = dechiffrer_aes(reste, ma_cle_prive)
+                    print(f"\n[TCP] Clé AES reçue avec succès de {id_destinataire} depuis {adresse[0]} ! Taille : {taille_message} octets.")
+                    print(f"\n Clé : {cle.hex()}")
+                    with verrou :
+                        sessions[id_destinataire] = cle
+
+                case 2 :
+                    
+                    with verrou :
+                        nom = appareils_vus[id_destinataire]["nom"]
+                        cle = sessions[id_destinataire]
+                    texte = dechiffrer_message((reste[:12]), (reste[12:]), cle )
+                    
+                    print(f"\n {nom} : {texte}")
+
             connexion.close()
         except Exception as e :
             pass
 
 def envoyer_cle_session(id_destinataire) :
     global appareils_vus, sessions
-    
+
     with verrou :
-        if id_destinataire not in appareils_vus :
-            print("Erreur : cet appareil n'est plus dans la liste.")
-            return
-        
         info_appareil = appareils_vus[id_destinataire]
-        ip_dest = info_appareil["ip"]
-        cle_pub_b64 = info_appareil["Clé_publique"]
-        port_dest = int(info_appareil["port"])
+        
+    ip_dest = info_appareil["ip"]
+    cle_pub_b64 = info_appareil["Clé_publique"]
+    port_dest = int(info_appareil["port"])
 
     # 1. Génération de la clé AES aléatoire
     cle_aes = sr.token_bytes(32)
@@ -143,19 +153,14 @@ def envoyer_cle_session(id_destinataire) :
     cle_aes_chiffree = chiffrer_aes(cle_aes, cle_pub_b64)
     
     try :
-        # 3. Connexion TCP vers le port spécifique du destinataire
-        s_client = sc.socket(sc.AF_INET, sc.SOCK_STREAM)
-        s_client.connect((ip_dest, port_dest))
         
         # 4. Envoi de la taille puis du message complet
         id_coder = mon_id.encode("utf-8")
-        message = id_coder + cle_aes_chiffree
+        message = (b'\x01') + id_coder + cle_aes_chiffree
         taille_message = len(message)
         taille_message_bytes = taille_message.to_bytes(4, 'big')
 
-        s_client.sendall(taille_message_bytes)
-        s_client.sendall(message)
-        s_client.close()
+        envoi_tout(port_dest, ip_dest, taille_message, taille_message_bytes)
         
         # 5. Stockage local de la clé AES dans les sessions
         with verrou :
@@ -166,6 +171,7 @@ def envoyer_cle_session(id_destinataire) :
         
     except Exception as e :
         print(f"\n[Erreur TCP] Impossible d'envoyer la clé : {e}")
+
 
 #-----------------------------------------------------------------------------------------------------------------------------
 verrou = tr.Lock()
@@ -188,6 +194,8 @@ dernier_vu = tm.time()
 appareils_vus = {} 
 sessions = {} 
 #------------------------------------------------------------------------------------------------------------------------------
+
+
 def ecouter() :
     global appareils_vus, mon_id
     s_ecoute = creer_sc()
@@ -246,6 +254,96 @@ def creer_sc() :
     s.setsockopt(sc.SOL_SOCKET, sc.SO_BROADCAST, 1)
     return s
 
+def chiffrer_message(texte, cle_session) :
+    # On génère le nonce unique de 12 octets
+    nonce = sr.token_bytes(12)
+    texte_octets = texte.encode("utf-8")
+    
+    # On chiffre avec la vraie clé AES de session (32 octets) et le nonce
+    texte_chiffre = AES(cle_session).encrypt(nonce, texte_octets, None)
+    return nonce, texte_chiffre
+
+def dechiffrer_message(nonce, texte_chiffre, cle_session) :
+    try :
+        texte_dechiffre = AES(cle_session).decrypt(nonce, texte_chiffre, None)
+        return texte_dechiffre.decode("utf-8")
+    except Exception as e :
+        # En cas de corruption ou de mauvaise clé/nonce
+        return None     
+
+
+
+
+
+
+
+def envoi_tout(port, ip, m1, m2="") :
+
+        # 3. Connexion TCP vers le port spécifique du destinataire
+        try :
+            s_client = sc.socket(sc.AF_INET, sc.SOCK_STREAM)
+            s_client.connect((ip, port))
+        
+            s_client.sendall(m1)
+            if m2 != "" :
+                s_client.sendall(m2) 
+            s_client.close()
+
+        except Exception as e :
+            print("Echec d'envoi")
+
+
+def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
+    global appareils_vus, sessions
+    id_destinataire = input("Entrez l'ID du destinaitaire : ").strip()
+    with verrou :
+        if id_destinataire not in appareils_vus :
+            print("Le destinataire n'est plus en ligne")
+            return
+
+    print("Info : le message doit être non vide et maximum 160 caractères")
+    message = input("Entrez votre message : ").strip()
+    while message == "" or len(message) > 160 : # Car on peut se tromper appuyer sur entrée
+        print("Message invalide")
+        message = input("Entrez votre message : ").strip()
+
+    if id_destinataire not in sessions :
+        envoyer_cle_session(id_destinataire)
+
+    with verrou :
+        cle = sessions[id_destinataire]
+
+    nonce, texte = chiffrer_message(message, cle)
+
+    tout = (b'\x02') + id_destinataire.encode("utf-8") + nonce + texte
+        
+    def renvoi_taille(tout) : # Je vais le garder malgré et aussi les sous fonctions m'aident à mieux me repérer
+        taille_message = len(tout)
+        taille_message_bytes = taille_message.to_bytes(4, 'big')
+        return taille_message_bytes
+
+    taille = renvoi_taille(tout)
+
+    with verrou :
+        ip = appareils_vus[id_destinataire]["ip"]
+        port = int(appareils_vus[id_destinataire]["port"])
+
+    envoi_tout(port, ip, taille , tout)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def main():
     les_ouvriers()
     
@@ -254,7 +352,8 @@ def main():
     while True :
         print("\n--- MENU ---")
         print("1. Afficher les appareils connectés")
-        print("2. Envoyer une clé de session à un appareil")
+        #print("2. Envoyer une clé de session à un appareil") Plus nécessaire prepare_envoi va s'en charger
+        print("2. Envoyer un message")
         print("3. Quitter")
 
         choix = input("Votre choix : ").strip()
@@ -269,9 +368,7 @@ def main():
                             print(f"ID: {identifiant} | Nom: {info['nom']} | IP: {info['ip']} | Port: {info['port']}")
 
             case "2" :
-                identifiant = input("Entrez l'ID de l'appareil destinataire : ").strip()
-                envoyer_cle_session(identifiant)
-
+                prepare_envoi()
             case "3" :
                 print("Fermeture du programme...")
                 return
