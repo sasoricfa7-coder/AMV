@@ -111,8 +111,10 @@ def ecouter_tcp() :
                 donnees_chiffrees += morceau
 
             type_message = int (donnees_chiffrees[0])
-            id_destinataire = (donnees_chiffrees[1:17]).decode("utf-8")
-            reste = donnees_chiffrees[17:]
+            reste = donnees_chiffrees[1:]
+            print(f"Tout - type_message : {len(reste)}")
+            id_destinataire = (donnees_chiffrees[:16]).decode("utf-8")
+            reste = donnees_chiffrees[16:]
 
             match type_message : # Avec match l'ajout d'un nouveau type de donnée est facile
 
@@ -135,11 +137,13 @@ def ecouter_tcp() :
                 case 3 : # La j'ai l'ID du destinataire final et aussi le reste qui contient l'idée de l'émetteur
                     id_emeteur = reste[:16].decode("utf-8")
                     reste = reste[16:] # On retir l'ID de l'émetteur car ca ne nous sert pas.
+                    print(f"Tout - type_message - id_emeteur : {len(reste)}")
                     compteur = int(reste[0])
                     if compteur == 0 :
                         print("Message jeté")
                         continue
                     reste = reste[1:] # On supprime aussi le compteur donc il ne reste  : Type de message et message chiffré
+                    print(f"Tout - type_message - id_emeteur - TTL : {len(reste)}")
                     if id_destinataire != mon_id : # Je gère d'abord le cas ou je ne suis qu'un seul simple relais
                         with verrou :
                             if id_destinataire not in appareils_vus :
@@ -156,6 +160,19 @@ def ecouter_tcp() :
                         if not valide :
                             print("Echec d'envoi")
                             continue
+
+                    else :
+                        type_message = int (reste[0])
+                        reste = reste[1:]
+                        print("Reste qui arrive chez le bon destinataire - type de message {len(reste)}")
+                        match type_message :
+                            case 2 : # Je pense dans l'avenir quand on ajoutera les vocaux ou autres
+                                with verrou :
+                                    nom = appareils_vus[id_emeteur]["nom"]
+                                    cle = sessions[id_emeteur]
+                                texte = dechiffrer_message((reste[:12]), (reste[12:]), cle )
+                    
+                                print(f"\n {nom} : {texte}")  
 
             connexion.close()
         except Exception as e :
@@ -339,18 +356,13 @@ def prepare_envoi_relais() :
         if destinataire_final not in appareils_vus :
             print("Le destinataire n'est plus en ligne.")
             return
-        
-    while True :
-        try :
-            compteur = int(input("Entrez le nombre de rebomd souhaiter : "))
-            print("Info : le message doit être non vide et maximum 160 caractères")
-            message = input("Entrez votre message : ")
-            if len(message) < 160 and message != "" :
-                break
 
-        except Exception as e :
-            print(e)
-            print("Entrée invalide.")
+    print("Info : le message doit être non vide et maximum 160 caractères")
+    message = input("Entrez votre message : ")
+    while len(message) > 160 or message == "" :         
+            message = input("Entrez votre message : ")
+
+    compteur = 3
 
     with verrou :
         if destinataire_final not in sessions :
@@ -394,7 +406,7 @@ def prepare_envoi_relais() :
                 valide = envoi_tout(port, ip, taille , produit_final)
                 if not valide :
                     print("Echec")
-                    return
+                return
 
             case "2" :
                 print("Annulation...")
