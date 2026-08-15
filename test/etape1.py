@@ -385,57 +385,23 @@ def prepare_envoi_relais() :
     produit_final =  construire_envellope_relais(destinataire_final, mon_propre_id, compteur, type_message, message_chiffrer)
     taille = renvoi_taille(produit_final)
 
-    while True :
-        print ("1. Entrez le relais par lequel vous voulez transiter : ")
-        print("2. Annuler")
-        choix = input()
+    relais_choisis = input("Entrez l'ID de votre transiteur : ")
+    with verrou :
+        if relais_choisis not in appareils_vus or relais_choisis == destinataire_final :
+            print("Le transiteur n'est plus en ligne")
+            return
+        ip = appareils_vus[relais_choisis] ["ip"] # Tout est sous verrou
+        port = appareils_vus[relais_choisis] ["port"]
 
-        match choix :
-            case "1" :
-                relais_choisis = input("Entrez l'ID de votre transiteur : ")
-                with verrou :
-                    if relais_choisis not in appareils_vus :
-                        print("Le transiteur n'est plus en ligne")
-                        return
-                    ip = appareils_vus[relais_choisis] ["ip"] # Tout est sous verrou
-                    port = appareils_vus[relais_choisis] ["port"]
-                        
-                if not valide :
-                    print("Echec")
-                    return
-
-                valide = envoi_tout(port, ip, taille , produit_final)
-                if not valide :
-                    print("Echec")
-                return
-
-            case "2" :
-                print("Annulation...")
-                return
-
-            case _ :
-                print("Entrée invalide")
+    valide = envoi_tout(port, ip, taille , produit_final)
+    if not valide :
+        print("Echec")
+        return
     
 def renvoi_taille(tout) : # Je vais le garder malgré et aussi les sous fonctions m'aident à mieux me repérer
     taille_message = len(tout)
     taille_message_bytes = taille_message.to_bytes(4, 'big')
     return taille_message_bytes 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
     global appareils_vus, sessions, mon_id
@@ -478,18 +444,6 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
 
     if not valide :
         return
-
-
-
-
-
-
-
-
-
-
-
-
 
 def affichage() :
     print("\n--- MENU ---")
