@@ -112,9 +112,9 @@ def ecouter_tcp() :
 
             type_message = int (donnees_chiffrees[0])
             reste = donnees_chiffrees[1:]
-            print(f"Tout - type_message : {len(reste)}")
-            id_destinataire = (donnees_chiffrees[:16]).decode("utf-8")
-            reste = donnees_chiffrees[16:]
+            #print(f"Tout - type_message : {len(reste)}")
+            id_destinataire = (reste[:16]).decode("utf-8")
+            reste = reste[16:]
 
             match type_message : # Avec match l'ajout d'un nouveau type de donnée est facile
 
@@ -137,13 +137,13 @@ def ecouter_tcp() :
                 case 3 : # La j'ai l'ID du destinataire final et aussi le reste qui contient l'idée de l'émetteur
                     id_emeteur = reste[:16].decode("utf-8")
                     reste = reste[16:] # On retir l'ID de l'émetteur car ca ne nous sert pas.
-                    print(f"Tout - type_message - id_emeteur : {len(reste)}")
+                    #print(f"Tout - type_message - id_emeteur : {len(reste)}")
                     compteur = int(reste[0])
                     if compteur == 0 :
                         print("Message jeté")
                         continue
                     reste = reste[1:] # On supprime aussi le compteur donc il ne reste  : Type de message et message chiffré
-                    print(f"Tout - type_message - id_emeteur - TTL : {len(reste)}")
+                    #print(f"Tout - type_message - id_emeteur - TTL : {len(reste)}")
                     if id_destinataire != mon_id : # Je gère d'abord le cas ou je ne suis qu'un seul simple relais
                         with verrou :
                             if id_destinataire not in appareils_vus :
@@ -154,6 +154,7 @@ def ecouter_tcp() :
                                 ip = appareils_vus[id_destinataire]["ip"]
                                 
                         compteur -= 1 # Ici je décremente le compteur
+                        reste = reste[1:]
                         tout = (b'\x02') + id_emeteur.encode("utf-8") + reste # ici le type est remis à 2
                         taille = renvoi_taille(tout)
                         valide = envoi_tout(port, ip, taille, tout)
@@ -164,7 +165,7 @@ def ecouter_tcp() :
                     else :
                         type_message = int (reste[0])
                         reste = reste[1:]
-                        print("Reste qui arrive chez le bon destinataire - type de message {len(reste)}")
+                        #print("Reste qui arrive chez le bon destinataire - type de message {len(reste)}")
                         match type_message :
                             case 2 : # Je pense dans l'avenir quand on ajoutera les vocaux ou autres
                                 with verrou :
@@ -379,7 +380,7 @@ def prepare_envoi_relais() :
     message_chiffrer = nonce + texte
     with verrou :
         mon_propre_id = mon_id
-    type_message = 3
+    type_message = 2
 
     produit_final =  construire_envellope_relais(destinataire_final, mon_propre_id, compteur, type_message, message_chiffrer)
     taille = renvoi_taille(produit_final)
@@ -490,6 +491,13 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
 
 
 
+def affichage() :
+    print("\n--- MENU ---")
+    print("1. Afficher les appareils connectés")
+    print("2. Envoyer un message")
+    print("3. Envoyer un message via un relais")
+    print("4. Nettoyer l'écran")
+    print("5. Quitter")
 
 
 def main():
@@ -498,13 +506,7 @@ def main():
     tm.sleep(1) 
 
     while True :
-        print("\n--- MENU ---")
-        print("1. Afficher les appareils connectés")
-        #print("2. Envoyer une clé de session à un appareil") Plus nécessaire prepare_envoi va s'en charger
-        print("2. Envoyer un message")
-        print("3. Envoyer un message via un relais")
-        print("4. Quitter")
-
+        affichage()
         choix = input("Votre choix : ").strip()
 
         match choix :
@@ -520,7 +522,10 @@ def main():
                 prepare_envoi()
             case "3" :
                 prepare_envoi_relais()
-            case "4" :
+
+            case "4" : 
+                os.system("clear")
+            case "5" :
                 print("Fermeture du programme...")
                 return
             case _ :
