@@ -1,0 +1,42 @@
+Fiche — Étape 5 : table de rencontres et gossip de présence
+Objectif
+
+Permettre à un appareil de connaître l'existence d'autres appareils qu'il n'a jamais vus directement, grâce à ce que les appareils autour de lui leur ont eux-mêmes rapporté avoir vu. C'est ce qui va enfin permettre d'envoyer un message vers quelqu'un hors de portée directe, sans que l'utilisateur ait besoin de connaître et choisir manuellement un relais comme actuellement.
+
+Nouveau canal : un deuxième broadcast UDP dédié à la présence
+Choisis un nouveau port UDP, différent de celui de la découverte de base (12345).
+Toutes les quelques secondes (tu peux réutiliser un intervalle proche de celui de la découverte), chaque appareil diffuse en broadcast la liste de tout ce qu'il connaît : à la fois ce qu'il a vu directement (son appareils_vus), et ce qu'on lui a rapporté avoir vu ailleurs.
+Structure d'une entrée de présence
+
+Pour chaque appareil connu (directement ou par ouï-dire), il faut retenir :
+
+L'id de l'appareil concerné
+Un horodatage de la dernière fois où on a une preuve de sa présence (la tienne ou celle rapportée)
+Un nombre de sauts restants pour cette information (TTL de gossip, fixé à 3 comme décidé)
+Étape 5a — Structure de données : la table de rencontres
+
+Crée un nouveau dictionnaire, séparé de appareils_vus (qui reste réservé à "je vois ce hotspot directement, là, maintenant"). Appelle-le par exemple table_rencontres, avec pour chaque id : {"dernier_vu": timestamp, "sauts_restants": ttl}.
+
+Étape 5b — Émission du gossip
+
+Construis et diffuse périodiquement un message contenant : pour chaque entrée connue (dans appareils_vus et dans table_rencontres), son id, son dernier horodatage connu, et son TTL de gossip actuel. Réfléchis toi-même à un format simple pour encoder plusieurs entrées dans un seul paquet UDP (une liste d'enregistrements de taille fixe se prête bien à ça, tu as déjà l'habitude des découpages à taille fixe).
+
+Étape 5c — Réception du gossip
+
+Quand tu reçois une annonce de gossip d'un voisin :
+
+Pour chaque entrée qu'elle contient, ignore-la si son id est le tien (pas la peine de te rapporter à toi-même), ou si son TTL est déjà à 0.
+Sinon, compare avec ce que tu as déjà dans ta table_rencontres pour cet id : si tu n'as rien, ou si l'horodatage rapporté est plus récent que celui que tu avais, mets à jour ton entrée avec ce nouvel horodatage et décrémente le TTL reçu de 1 avant de le stocker (puisque l'info vient de faire un saut de plus pour arriver jusqu'à toi).
+Nettoie régulièrement cette table comme tu le fais déjà pour appareils_vus : toute entrée dont dernier_vu dépasse 1 minute est supprimée.
+Étape 5d — Utiliser cette table pour le relayage automatique
+
+C'est le vrai gain de cette étape : dans prepare_envoi_relais, au lieu de demander à l'utilisateur de choisir manuellement un relais, le programme peut maintenant chercher lui-même : le destinataire est-il dans table_rencontres (même sans lien direct) ? Si oui, à qui dois-tu envoyer le paquet pour te rapprocher de lui ? Pour cette étape, une version simple suffit : envoie le paquet à n'importe quel appareil actuellement visible dans appareils_vus (puisque tu n'as pas encore l'info de "qui, parmi mes voisins directs, a le plus de chances d'être proche du destinataire" — ce sera un raffinement possible plus tard). L'important ici est que ce ne soit plus l'utilisateur qui choisisse à la main, mais le programme.
+
+Ce que je veux voir
+La structure de table_rencontres et son nettoyage périodique
+L'émission du gossip (nouveau thread, nouveau port UDP)
+La réception et fusion du gossip (avec la règle de l'horodatage le plus récent et la décrémentation du TTL)
+La version automatisée de l'envoi via relais (sans que l'utilisateur choisisse le relais à la main)
+Test à faire toi-même
+
+Lance quatre instances cette fois (A, B, C, D), mais assure-toi que D ne diffuse jamais directement à A (par exemple, teste avec un TTL de découverte de base très court, ou simplement observe si A voit D apparaître dans sa table_rencontres sans jamais apparaître dans son appareils_vus direct — ça prouvera que l'info a bien voyagé par gossip via B ou C). Vérifie ensuite qu'un message envoyé automatiquement (sans choix manuel de relais) depuis A vers D arrive bien.

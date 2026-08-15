@@ -358,9 +358,9 @@ def prepare_envoi_relais() :
             print("Le destinataire n'est plus en ligne.")
             return
 
-    print("Info : le message doit être non vide et maximum 160 caractères")
+    print("Info : le message doit être non vide et maximum 80 caractères")
     message = input("Entrez votre message : ")
-    while len(message) > 160 or message == "" :         
+    while len(message) > 80 or message == "" : # pour la v1       
             message = input("Entrez votre message : ")
 
     compteur = 3
@@ -413,9 +413,9 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
             print("Le destinataire n'est plus en ligne")
             return
 
-    print("Info : le message doit être non vide et maximum 160 caractères")
+    print("Info : le message doit être non vide et maximum 80 caractères")
     message = input("Entrez votre message : ").strip()
-    while message == "" or len(message) > 160 : # Car on peut se tromper appuyer sur entrée
+    while message == "" or len(message) > 80 : # Car on peut se tromper appuyer sur entrée
         print("Message invalide")
         message = input("Entrez votre message : ").strip()
 
@@ -446,7 +446,8 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
         return
 
 def affichage() :
-    print("\n--- MENU ---")
+    print(f"{nom}")
+    print("\n--- MENU ---\n")
     print("1. Afficher les appareils connectés")
     print("2. Envoyer un message")
     print("3. Envoyer un message via un relais")
