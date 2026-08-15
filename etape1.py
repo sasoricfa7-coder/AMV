@@ -86,7 +86,7 @@ def chiffrer_aes(cle_aes, cle_publique_b64) :
     return cle_chiffree
         
 def ecouter_tcp() :
-    global sessions, ma_cle_prive, port_optionnel, appareils_vus
+    global sessions, ma_cle_prive, port_optionnel, appareils_vus, mon_id
     s_tcp = sc.socket(sc.AF_INET, sc.SOCK_STREAM)
     s_tcp.setsockopt(sc.SOL_SOCKET, sc.SO_REUSEADDR, 1)
     s_tcp.bind(('', port_optionnel))
@@ -131,6 +131,44 @@ def ecouter_tcp() :
                     texte = dechiffrer_message((reste[:12]), (reste[12:]), cle )
                     
                     print(f"\n {nom} : {texte}")
+
+                case 3 : # La j'ai l'ID du destinataire final et aussi le reste qui contient l'idée de l'émetteur
+                    id_emeteur = reste[:17].decode("utf-8")
+                    reste = reste[17:] # On retir l'ID de l'émetteur car ca ne nous sert pas.
+                    compteur = int(reste[0])
+                    if compteur == 0 :
+                        print("Message jeté")
+                        return
+                    reste = reste[1:] # On supprime aussi le compteur donc il ne reste  : Type de message et message chiffré
+                    if id_destinataire != mon_id : # Je gère d'abord le cas ou je ne suis qu'un seul simple relais
+                        with verrou :
+                            if id_destinataire not in appareils_vus :
+                                print("Echec : Destinataire n'est pas en ligne")
+                                return
+                            else :
+                                port = appareils_vus[id_destinataire]["port"]
+                                ip = appareils_vus[id_destinataire]["ip"]
+                                
+                        compteur -= 1
+                        tout = (b'\x02') + id_emeteur.encode("utf-8") + reste
+                        taille = renvoi_taille(tout)
+                        valide = envoi_tout(port, ip, taille, tout)
+                        if not valide :
+                            print("Echec d'envoi")
+                            return
+
+                    else :
+                        type_message = int (reste[0])
+                        match type_message :
+                            case 2 : # Je pense dans l'avenir quand on ajoutera les vocaux ou autres
+                                with verrou :
+                                    nom = appareils_vus[id_emeteur]["nom"]
+                                    cle = sessions[id_emeteur]
+                                texte = dechiffrer_message((reste[:12]), (reste[12:]), cle )
+                    
+                                print(f"\n {nom} : {texte}")                                    
+
+                            
 
             connexion.close()
         except Exception as e :
@@ -277,12 +315,6 @@ def dechiffrer_message(nonce, texte_chiffre, cle_session) :
         print(e)
         return None     
 
-
-
-
-
-
-
 def envoi_tout(port, ip, m1, m2="") :
 
         # 3. Connexion TCP vers le port spécifique du destinataire
@@ -301,6 +333,111 @@ def envoi_tout(port, ip, m1, m2="") :
             print(e)
             return False
             
+def construire_envellope_relais(destinataire_final, mon_propre_id, compteur, type_message, message_chiffrer) :
+    type_indication = b'\x03'
+    destinataire_final = destinataire_final.encode("utf-8")
+    mon_propre_id = mon_propre_id.encode("utf-8")
+    compteur = compteur.to_bytes(1, "big")
+    type_message = type_message.to_bytes(1, "big")
+
+    produit_final = type_indication + destinataire_final + mon_propre_id + compteur + type_message + message_chiffrer
+    return produit_final
+
+def prepare_envoi_relais() :
+    global appareils_vus, sessions, mon_id
+
+    destinataire_final = input("Entrez l'ID du destinataire final : ")
+    with verrou :
+        if destinataire_final not in appareils_vus :
+            print("Le destinataire n'est plus en ligne.")
+            return
+        
+    while True :
+        try :
+            compteur = int(input("Entrez le nombre de rebomd souhaiter : "))
+            print("Info : le message doit être non vide et maximum 160 caractères")
+            message = input("Entrez votre message : ")
+            if len(message) < 160 and message != "" :
+                break
+
+        except Exception as e :
+            print(e)
+            print("Entrée invalide.")
+
+    with verrou :
+        if destinataire_final not in sessions :
+            valide = envoyer_cle_session(destinataire_final)
+
+    if not valide :
+        print("Echec")
+        return
+
+    with verrou :
+        cle = sessions[destinataire_final]
+
+    nonce, texte = chiffrer_message(message, cle)
+    message_chiffrer = nonce + texte
+    with verrou :
+        mon_propre_id = mon_id
+    type_message = 3
+
+    produit_final =  construire_envellope_relais(destinataire_final, mon_propre_id, compteur, type_message, message_chiffrer)
+    taille = renvoi_taille(produit_final)
+
+    while True :
+        print ("1. Entrez le relais par lequel vous voulez transiter : ")
+        print("2. Annuler")
+        choix = input()
+
+        match choix :
+            case "1" :
+                relais_choisis = input("Entrez l'ID de votre transiteur : ")
+                with verrou :
+                    if relais_choisis not in appareils_vus :
+                        print("Le transiteur n'est plus en ligne")
+                    if relais_choisis not in sessions :
+                        valide = envoyer_cle_session(relais_choisis)
+                    else :
+                        cle_relais = sessions[relais_choisis]
+                        valide = True
+                        ip = appareils_vus[relais_choisis] ["ip"] # Tout es t sous verrou
+                        port = appareils_vus[relais_choisis] ["port"]
+                        
+                if not valide :
+                    print("Echec")
+                    return
+
+                valide = envoi_tout(port, ip, taille , produit_final)
+                if not valide :
+                    print("Echec")
+                    return
+
+            case "2" :
+                print("Annulation...")
+                return
+
+            case _ :
+                print("Entrée invalide")
+    
+def renvoi_taille(tout) : # Je vais le garder malgré et aussi les sous fonctions m'aident à mieux me repérer
+    taille_message = len(tout)
+    taille_message_bytes = taille_message.to_bytes(4, 'big')
+    return taille_message_bytes 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
@@ -317,11 +454,12 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
         print("Message invalide")
         message = input("Entrez votre message : ").strip()
 
-    if id_destinataire not in sessions :
-        valide = envoyer_cle_session(id_destinataire)
-        if not valide :
-            print("Echec")
-            return
+    with verrou :
+        if id_destinataire not in sessions :
+            valide = envoyer_cle_session(id_destinataire)
+    if not valide :
+        print("Echec")
+        return
 
     with verrou :
         cle = sessions[id_destinataire]
@@ -330,10 +468,6 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
 
     tout = (b'\x02') + mon_id.encode("utf-8") + nonce + texte
         
-    def renvoi_taille(tout) : # Je vais le garder malgré et aussi les sous fonctions m'aident à mieux me repérer
-        taille_message = len(tout)
-        taille_message_bytes = taille_message.to_bytes(4, 'big')
-        return taille_message_bytes
 
     taille = renvoi_taille(tout)
 
@@ -370,7 +504,8 @@ def main():
         print("1. Afficher les appareils connectés")
         #print("2. Envoyer une clé de session à un appareil") Plus nécessaire prepare_envoi va s'en charger
         print("2. Envoyer un message")
-        print("3. Quitter")
+        print("3. Envoyer un message via un relais")
+        print("4. Quitter")
 
         choix = input("Votre choix : ").strip()
 
@@ -386,6 +521,8 @@ def main():
             case "2" :
                 prepare_envoi()
             case "3" :
+                prepare_envoi_relais()
+            case "4" :
                 print("Fermeture du programme...")
                 return
             case _ :
