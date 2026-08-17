@@ -240,6 +240,7 @@ ip = None
 dernier_vu = tm.time()
 appareils_vus = {} 
 sessions = {} 
+table_rencontre = {}
 #------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -263,6 +264,33 @@ def ecouter() :
         except Exception as e  :
             print(e)
 
+def ecouter_table() :
+    global appareils_vus, mon_id, table_rencontre
+    s_ecoute = creer_sc()
+    s_ecoute.bind(('', 54321))
+    while True :
+        try :
+            donnee, adresse_ip = s_ecoute.recvfrom(4096)
+            donnee = donnee.decode("utf-8")
+            L = donnee.split("|")
+
+            for i in L:
+                chaque_appareil = i.split(",")
+                saut_restant = int(chaque_appareil[-1]) - 1 # pour eviter la boucle infinie
+                if saut_restant <= 0 : # < en cas de bug
+                    continue
+                with verrou :
+                    if chaque_appareil[0] == mon_id :
+                        continue
+                
+                petit_dictionnaire = {"dernier_vu" : float(chaque_appareil[1]), "TTL" : saut_restant}
+                with verrou :
+                    table_rencontre[chaque_appareil[0]] = petit_dictionnaire
+
+
+        except Exception as e :
+            print(e)
+
 def les_ouvriers() :
     ouvrier_emeteur = tr.Thread(target=emettre, daemon=True)
     ouvrier_emeteur.start()
@@ -272,7 +300,57 @@ def les_ouvriers() :
     ouvrier_presence.start()
     ouvrier_tcp = tr.Thread(target=ecouter_tcp, daemon=True)
     ouvrier_tcp.start()
+    ouvrier_table_rencontre = tr.Thread(target=nettoyer_table_renconte, daemon=True)
+    ouvrier_table_rencontre.start()
+    ouvrier_ecouter_table = tr.Thread(target=ecouter_table, daemon=True)
+    ouvrier_ecouter_table.start()
+    ouvrier_emmission_table = tr.Thread(target=emission_table, daemon=True)
     
+def nettoyer_table_renconte() : # je ferai d'abord le plus simple avant de voir ecouter
+    global table_rencontre
+    
+    try : 
+        while True :
+            with verrou :
+                for i in list(table_rencontre) :
+                    if (tm.time() - table_rencontre[i]["dernier_vu"] >= 60) :
+                        del table_rencontre[i]
+            tm.sleep(3)
+
+    except Exception as e :
+        print(e)
+
+def emission_table() :
+    global appareils_vus, table_rencontre, mon_id
+    s = creer_sc()
+    adresse = 'broadcast'
+    port_gossip = 54321
+
+    while True :
+        tm.sleep(3)
+        message_morceau = []
+
+        with verrou :
+            # D'abord on ajoute les voisins directs
+            for indentifiant, info in appareils_vus.items() :
+                morceau = f"{identifiant},{info['dernier_vu']},3" # , me facilitera la distinction à la réception
+                message_morceau.append(morceau)
+
+            # On ajoute ensuite tous les appareils connus
+            for identifiant, info in table_rencontre.items() :
+                if identifiant not in appareils_vus and identifiant != mon_id :
+                    morceau = f"{identifiant},{info['dernier_vu']},{info['TTL']}" #TTL pour le nombre de sauts restants
+                     message_morceau.append(morceau)
+
+        if message_morceau :
+            # On assemble tout avec un séparateur global (ex: un point-virgule entre chaque appareil)
+            donnee_final = ";".join(message_morceau)
+            try :
+                s.sendto(donnee_final.encode("utf-8"), adresse, port_gossip)
+                
+            except Exception as e :
+                print(e)
+
 def liste_présence() :
     global appareils_vus
     try :
