@@ -84,6 +84,15 @@ def chiffrer_aes(cle_aes, cle_publique_b64) :
         )
     )
     return cle_chiffree
+
+def traiter_cas_message(id_destinataire, reste) :
+    global appareils_vus, sessions
+    with verrou :
+        nom = appareils_vus[id_destinataire]["nom"]
+        cle = sessions[id_destinataire]
+    texte = dechiffrer_message((reste[:12]), (reste[12:]), cle )
+                    
+    print(f"\n {nom} : {texte}")
         
 def ecouter_tcp() :
     global sessions, ma_cle_prive, port_optionnel, appareils_vus, mon_id
@@ -126,13 +135,7 @@ def ecouter_tcp() :
                         sessions[id_destinataire] = cle
 
                 case 2 :
-                    
-                    with verrou :
-                        nom = appareils_vus[id_destinataire]["nom"]
-                        cle = sessions[id_destinataire]
-                    texte = dechiffrer_message((reste[:12]), (reste[12:]), cle )
-                    
-                    print(f"\n {nom} : {texte}")
+                    traiter_cas_message(id_destinataire, reste)                    
 
                 case 3 : # La j'ai l'ID du destinataire final et aussi le reste qui contient l'idée de l'émetteur
                     id_emeteur = reste[:16].decode("utf-8")
@@ -144,36 +147,29 @@ def ecouter_tcp() :
                         continue
                     reste = reste[1:] # On supprime aussi le compteur donc il ne reste  : Type de message et message chiffré
                     #print(f"Tout - type_message - id_emeteur - TTL : {len(reste)}")
-                    if id_destinataire != mon_id : # Je gère d'abord le cas ou je ne suis qu'un seul simple relais
+                    if id_destinataire != mon_id : # Je gère d'abord le cas ou je ne suis qu'un simple relais
+
                         with verrou :
                             if id_destinataire not in appareils_vus :
-                                print("Echec : Destinataire n'est pas en ligne")
-                                continue
-                            else :
-                                port = appareils_vus[id_destinataire]["port"]
-                                ip = appareils_vus[id_destinataire]["ip"]
-                                
-                        compteur -= 1 # Ici je décremente le compteur
-                        reste = reste[1:]
-                        tout = (b'\x02') + id_emeteur.encode("utf-8") + reste # ici le type est remis à 2
-                        taille = renvoi_taille(tout)
-                        valide = envoi_tout(port, ip, taille, tout)
-                        if not valide :
-                            print("Echec d'envoi")
+                                id_relais = recherche_bon_relais(id_destinataire)
+                        if id_relais == "" :
+                            print("Destinataire hors de porté.")
                             continue
+                                    
+                        id_destinataire = id_relais # ici vu que l'on a trouver un bon relais c'est à lui on envoie
+                        type_pour_guider = b'\x03' # car c'est à un relais
+
+                        ip = appareils_vus[id_destinataire]["ip"]
+                        port = int(appareils_vus[id_destinataire]["port"])
+
+                        tout = type_pour_guider + mon_id.encode("utf-8") + nonce + texte
+                        taille = renvoi_taille(tout)
+                        valide = envoi_tout(port, ip, taille , tout)
 
                     else :
                         type_message = int (reste[0])
                         reste = reste[1:]
-                        #print("Reste qui arrive chez le bon destinataire - type de message {len(reste)}")
-                        match type_message :
-                            case 2 : # Je pense dans l'avenir quand on ajoutera les vocaux ou autres
-                                with verrou :
-                                    nom = appareils_vus[id_emeteur]["nom"]
-                                    cle = sessions[id_emeteur]
-                                texte = dechiffrer_message((reste[:12]), (reste[12:]), cle )
-                    
-                                print(f"\n {nom} : {texte}")  
+                        traiter_cas_message(id_destinataire, reste)
 
             connexion.close()
         except Exception as e :
@@ -346,7 +342,7 @@ def emission_table() :
             # On assemble tout avec un séparateur global (ex: un point-virgule entre chaque appareil)
             donnee_final = ";".join(message_morceau)
             try :
-                s.sendto(donnee_final.encode("utf-8"), adresse, port_gossip)
+                s.sendto(donnee_final.encode("utf-8"), (adresse, port_gossip))
                 
             except Exception as e :
                 print(e)
@@ -426,70 +422,19 @@ def construire_envellope_relais(destinataire_final, mon_propre_id, compteur, typ
     produit_final = type_indication + destinataire_final + mon_propre_id + compteur + type_message + message_chiffrer
     return produit_final
 
-def prepare_envoi_relais() :
-    global appareils_vus, sessions, mon_id
-
-    valide = True # Pour eviter les failles 
-    destinataire_final = input("Entrez l'ID du destinataire final : ")
+def prepare_envoi_relais(id_destinataire) :
+    global table_rencontre, appareils_vus
     with verrou :
-        if destinataire_final not in appareils_vus :
-            print("Le destinataire n'est plus en ligne.")
-            return
+        if id_destinataire in table_rencontre :
+            return list(appareils_vus.keys())[0]
 
-    print("Info : le message doit être non vide et maximum 80 caractères")
-    message = input("Entrez votre message : ")
-    while len(message) > 80 or message == "" : # pour la v1       
-            message = input("Entrez votre message : ")
-
-    compteur = 3
-
-    with verrou :
-        if destinataire_final not in sessions :
-            valide = envoyer_cle_session(destinataire_final)
-
-    if not valide :
-        print("Echec")
-        return
-
-    with verrou :
-        cle = sessions[destinataire_final]
-
-    nonce, texte = chiffrer_message(message, cle)
-    message_chiffrer = nonce + texte
-    with verrou :
-        mon_propre_id = mon_id
-    type_message = 2
-
-    produit_final =  construire_envellope_relais(destinataire_final, mon_propre_id, compteur, type_message, message_chiffrer)
-    taille = renvoi_taille(produit_final)
-
-    relais_choisis = input("Entrez l'ID de votre transiteur : ")
-    with verrou :
-        if relais_choisis not in appareils_vus or relais_choisis == destinataire_final :
-            print("Le transiteur n'est plus en ligne")
-            return
-        ip = appareils_vus[relais_choisis] ["ip"] # Tout est sous verrou
-        port = appareils_vus[relais_choisis] ["port"]
-
-    valide = envoi_tout(port, ip, taille , produit_final)
-    if not valide :
-        print("Echec")
-        return
-    
-def renvoi_taille(tout) : # Je vais le garder malgré et aussi les sous fonctions m'aident à mieux me repérer
-    taille_message = len(tout)
-    taille_message_bytes = taille_message.to_bytes(4, 'big')
-    return taille_message_bytes 
+    return ""
 
 def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
     global appareils_vus, sessions, mon_id
 
     valide = True # Pour eviter les failles 
     id_destinataire = input("Entrez l'ID du destinaitaire : ").strip()
-    with verrou :
-        if id_destinataire not in appareils_vus :
-            print("Le destinataire n'est plus en ligne")
-            return
 
     print("Info : le message doit être non vide et maximum 80 caractères")
     message = input("Entrez votre message : ").strip()
@@ -508,29 +453,50 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
         cle = sessions[id_destinataire]
 
     nonce, texte = chiffrer_message(message, cle)
-
-    tout = (b'\x02') + mon_id.encode("utf-8") + nonce + texte
-        
-
-    taille = renvoi_taille(tout)
+    message_chiffrer = nonce + texte
+    type_pour_guider = b""
 
     with verrou :
+        if id_destinataire == mon_id :
+            print(f"{message}")
+            return
+            
+        if id_destinataire not in appareils_vus :
+            id_relais = recherche_bon_relais(id_destinataire)
+            if id_relais == "" :
+                print("Destinataire hors de porté.")
+                return
+            compteur = 3
+            type_message = 2
+            tout = construire_envellope_relais(id_destinataire, mon_id, compteur, type_message, message_chiffrer)
+
+        else :
+            type_pour_guider = b"\x02"
+            tout = type_pour_guider + mon_id.encode("utf-8") + message_chiffrer
+            
         ip = appareils_vus[id_destinataire]["ip"]
         port = int(appareils_vus[id_destinataire]["port"])
 
+    taille = renvoi_taille(tout)
     valide = envoi_tout(port, ip, taille , tout)
 
     if not valide :
+        print("Echec")
         return
+
+def renvoi_taille(tout) : # Je vais le garder malgré et aussi les sous fonctions m'aident à mieux me repérer
+    taille_message = len(tout)
+    taille_message_bytes = taille_message.to_bytes(4, 'big')
+    return taille_message_bytes 
+
 
 def affichage() :
     print(f"{nom}")
     print("\n--- MENU ---\n")
     print("1. Afficher les appareils connectés")
     print("2. Envoyer un message")
-    print("3. Envoyer un message via un relais")
-    print("4. Nettoyer l'écran")
-    print("5. Quitter")
+    print("3. Nettoyer l'écran")
+    print("4. Quitter")
 
 
 def main():
@@ -553,12 +519,10 @@ def main():
 
             case "2" :
                 prepare_envoi()
-            case "3" :
-                prepare_envoi_relais()
 
-            case "4" : 
+            case "3" : 
                 os.system("clear")
-            case "5" :
+            case "4" :
                 print("Fermeture du programme...")
                 return
             case _ :
