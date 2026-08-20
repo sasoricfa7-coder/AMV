@@ -88,7 +88,10 @@ def chiffrer_aes(cle_aes, cle_publique_b64) :
 def traiter_cas_message(id_destinataire, reste) :
     global appareils_vus, sessions
     with verrou :
-        nom = appareils_vus[id_destinataire]["nom"]
+        nom = appareils_vus.get(id_destinataire, {}).get("nom", "Inconnu")
+        if id_destinataire not in sessions :
+            print("Pas de clé de session {id_destinataire}")
+            return
         cle = sessions[id_destinataire]
     texte = dechiffrer_message((reste[:12]), (reste[12:]), cle )
                     
@@ -100,6 +103,9 @@ def ecouter_tcp() :
     s_tcp.setsockopt(sc.SOL_SOCKET, sc.SO_REUSEADDR, 1)
     s_tcp.bind(('', port_optionnel))
     s_tcp.listen(5) 
+
+    with verrou :
+        id_tempo = mon_id
 
     while True :
         try :
@@ -138,37 +144,41 @@ def ecouter_tcp() :
                     traiter_cas_message(id_destinataire, reste)                    
 
                 case 3 : # La j'ai l'ID du destinataire final et aussi le reste qui contient l'idée de l'émetteur
+        
                     id_emeteur = reste[:16].decode("utf-8")
-                    reste = reste[16:] # On retir l'ID de l'émetteur car ca ne nous sert pas.
-                    #print(f"Tout - type_message - id_emeteur : {len(reste)}")
+                    reste = reste[16:]
+
                     compteur = int(reste[0])
-                    if compteur == 0 :
-                        print("Message jeté")
+                    reste = reste[1:]
+                    type_message = int(reste[0])
+                    reste = reste[1:]
+
+                    if compteur <= 1 :
+                        print("[Routage] Message jeté (TTL expiré)")
                         continue
-                    reste = reste[1:] # On supprime aussi le compteur donc il ne reste  : Type de message et message chiffré
-                    #print(f"Tout - type_message - id_emeteur - TTL : {len(reste)}")
-                    if id_destinataire != mon_id : # Je gère d'abord le cas ou je ne suis qu'un simple relais
 
+                    compteur -= 1
+                    
+                    if id_destinataire != id_tempo :
+                        id_relais = prepare_envoi_relais(id_destinataire)
                         with verrou :
-                            if id_destinataire not in appareils_vus :
-                                id_relais = recherche_bon_relais(id_destinataire)
-                        if id_relais == "" :
-                            print("Destinataire hors de porté.")
-                            continue
-                                    
-                        id_destinataire = id_relais # ici vu que l'on a trouver un bon relais c'est à lui on envoie
-                        type_pour_guider = b'\x03' # car c'est à un relais
+                            if id_relais == "" or id_relais not in appareils_vus :
+                                print("[Routage] Destinataire hors de portée.")
+                                continue
+                            ip = appareils_vus[id_relais]["ip"]
+                            port = int(appareils_vus[id_relais]["port"])
 
-                        ip = appareils_vus[id_destinataire]["ip"]
-                        port = int(appareils_vus[id_destinataire]["port"])
 
-                        tout = type_pour_guider + mon_id.encode("utf-8") + nonce + texte
+                        tout = construire_envellope_relais(id_destinataire, id_emeteur, compteur, type_message, reste)
                         taille = renvoi_taille(tout)
-                        valide = envoi_tout(port, ip, taille , tout)
+                        valide = envoi_tout(port, ip, taille, tout)
 
+                        if not valide :
+                            print("Echec d'envoie")
+                            continue
+
+    #produit_final = type_indication + destinataire_final + mon_propre_id + compteur + type_message + message_chiffrer
                     else :
-                        type_message = int (reste[0])
-                        reste = reste[1:]
                         traiter_cas_message(id_destinataire, reste)
 
             connexion.close()
@@ -264,25 +274,31 @@ def ecouter_table() :
     global appareils_vus, mon_id, table_rencontre
     s_ecoute = creer_sc()
     s_ecoute.bind(('', 54321))
+    with verrou :
+        id_tempo = mon_id
     while True :
         try :
             donnee, adresse_ip = s_ecoute.recvfrom(4096)
             donnee = donnee.decode("utf-8")
             L = donnee.split("|")
 
-            for i in L:
-                chaque_appareil = i.split(",")
-                saut_restant = int(chaque_appareil[-1]) - 1 # pour eviter la boucle infinie
-                if saut_restant <= 0 : # < en cas de bug
-                    continue
-                with verrou :
-                    if chaque_appareil[0] == mon_id :
-                        continue
-                
-                petit_dictionnaire = {"dernier_vu" : float(chaque_appareil[1]), "TTL" : saut_restant}
-                with verrou :
-                    table_rencontre[chaque_appareil[0]] = petit_dictionnaire
+            if len(L) >= 2 :
+                id_emeteur = L[0]
 
+                if id_emeteur == id_tempo :
+                    continue
+
+                chaine_voisin_direct = L[1]
+                if chaine_voisin_direct.strip() == "" :
+                    list_voisin_direct = []
+                else :
+                    list_voisin_direct = chaine_voisin_direct.split(",")
+
+                with verrou :
+                    table_rencontre[id_emeteur] = {
+                        "voisin" : list_voisin_direct ,
+                        "dernier_vu" : tm.time()
+                    }
 
         except Exception as e :
             print(e)
@@ -301,6 +317,7 @@ def les_ouvriers() :
     ouvrier_ecouter_table = tr.Thread(target=ecouter_table, daemon=True)
     ouvrier_ecouter_table.start()
     ouvrier_emmission_table = tr.Thread(target=emission_table, daemon=True)
+    ouvrier_emmission_table.start()
     
 def nettoyer_table_renconte() : # je ferai d'abord le plus simple avant de voir ecouter
     global table_rencontre
@@ -317,35 +334,31 @@ def nettoyer_table_renconte() : # je ferai d'abord le plus simple avant de voir 
         print(e)
 
 def emission_table() :
-    global appareils_vus, table_rencontre, mon_id
+    global appareils_vus, mon_id
     s = creer_sc()
-    adresse = 'broadcast'
+    adresse = '<broadcast>'
     port_gossip = 54321
 
     while True :
         tm.sleep(3)
-        message_morceau = []
+        message_morceau = {}
 
         with verrou :
-            # D'abord on ajoute les voisins directs
-            for indentifiant, info in appareils_vus.items() :
-                morceau = f"{identifiant},{info['dernier_vu']},3" # , me facilitera la distinction à la réception
-                message_morceau.append(morceau)
+            voisin_direct = list(appareils_vus.keys())
+            id_tempo = mon_id
 
-            # On ajoute ensuite tous les appareils connus
-            for identifiant, info in table_rencontre.items() :
-                if identifiant not in appareils_vus and identifiant != mon_id :
-                    morceau = f"{identifiant},{info['dernier_vu']},{info['TTL']}" #TTL pour le nombre de sauts restants
-                     message_morceau.append(morceau)
+        if voisin_direct :
+            chaine_voisin_direct = ",".join(voisin_direct)
+            donnee_final = f"{id_tempo}|{chaine_voisin_direct}"
 
-        if message_morceau :
-            # On assemble tout avec un séparateur global (ex: un point-virgule entre chaque appareil)
-            donnee_final = ";".join(message_morceau)
-            try :
-                s.sendto(donnee_final.encode("utf-8"), (adresse, port_gossip))
+        else :
+            donnee_final = f"{id_tempo}"
+
+        try :
+            s.sendto(donnee_final.encode("utf-8"), (adresse, port_gossip))
                 
-            except Exception as e :
-                print(e)
+        except Exception as e :
+            print(e)
 
 def liste_présence() :
     global appareils_vus
@@ -425,8 +438,9 @@ def construire_envellope_relais(destinataire_final, mon_propre_id, compteur, typ
 def prepare_envoi_relais(id_destinataire) :
     global table_rencontre, appareils_vus
     with verrou :
-        if id_destinataire in table_rencontre :
-            return list(appareils_vus.keys())[0]
+        for voisin_direct , info in table_rencontre.items() :
+            if id_destinataire in info["voisin"] :
+                return voisin_direct
 
     return ""
 
@@ -462,7 +476,7 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
             return
             
         if id_destinataire not in appareils_vus :
-            id_relais = recherche_bon_relais(id_destinataire)
+            id_relais = prepare_envoi_relais(id_destinataire)
             if id_relais == "" :
                 print("Destinataire hors de porté.")
                 return
