@@ -179,7 +179,15 @@ def ecouter_tcp() :
 
     #produit_final = type_indication + destinataire_final + mon_propre_id + compteur + type_message + message_chiffrer
                     else :
-                        traiter_cas_message(id_destinataire, reste)
+                        match type_message :
+                            case 1 :
+                                cle = dechiffrer_aes(reste, ma_cle_prive)
+                                print(f"\n[TCP] Clé AES reçue avec succès de {id_emeteur}! Taille : {taille_message} octets.")
+                                print(f"\n Clé : {cle.hex()}")
+                                with verrou :
+                                    sessions[id_emeteur] = cle                                
+                            case 2 :
+                                traiter_cas_message(id_emeteur, reste)
 
             connexion.close()
         except Exception as e :
@@ -280,25 +288,37 @@ def ecouter_table() :
         try :
             donnee, adresse_ip = s_ecoute.recvfrom(4096)
             donnee = donnee.decode("utf-8")
-            L = donnee.split("|")
+            L = donnee.split(";")
 
             if len(L) >= 2 :
                 id_emeteur = L[0]
 
                 if id_emeteur == id_tempo :
                     continue
+                if not L[1:] :
+                    continue
 
-                chaine_voisin_direct = L[1]
-                if chaine_voisin_direct.strip() == "" :
-                    list_voisin_direct = []
-                else :
-                    list_voisin_direct = chaine_voisin_direct.split(",")
+                entrees = L[1:]
 
-                with verrou :
-                    table_rencontre[id_emeteur] = {
-                        "voisin" : list_voisin_direct ,
-                        "dernier_vu" : tm.time()
-                    }
+                for i in entrees :
+                    morceau = i.split(":")
+                    id_cible = morceau[0]
+                    timestamp = float(morceau[1])
+                    ttl = int(morceau[2]) - 1
+                    cle_pub_b64 = morceau[3]
+                    if ttl <= 0 :
+                        continue
+
+                    with verrou :
+                        if id_cible in appareils_vus or table_rencontre[id_cible]["dernier_vu"] < timestamp or id_cible == id_tempo:
+                            continue
+
+                        table_rencontre[id_cible] = {
+                            "cle_pub_b64" : cle_pub_b64 ,
+                            "dernier_vu" : timestamp,
+                            "saut_restant" : ttl,
+                            "via" : id_emeteur
+                        } 
 
         except Exception as e :
             print(e)

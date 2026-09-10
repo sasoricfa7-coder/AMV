@@ -1,0 +1,61 @@
+Fiche — Étape 5 : gossip de présence avec clé publique incluse
+Principe retenu
+
+Le gossip diffuse, en plus des identifiants, la clé publique de chaque contact connu — plus besoin d'échange préalable pour l'obtenir. Contrainte technique : un paquet UDP doit rester sous ~1472 octets pour éviter la fragmentation (risquée en WiFi). Une clé publique encodée pèse ~390-400 octets, donc chaque diffusion se limite à 3 entrées maximum, avec rotation dans le temps pour que tout finisse par circuler.
+
+5.0 — Correction préalable : généraliser le type interne relayé
+
+Dans case 3, branche relais, remplace le b'\x02' codé en dur par le vrai type interne reçu (celui que tu extrais juste avant avec int(reste[0]), avant de le consommer). Réutilise-le tel quel au lieu de le remplacer par une valeur fixe.
+
+5a — Structure de données
+
+Un nouveau dictionnaire, table_rencontres, séparé de appareils_vus :
+
+table_rencontres[id] = {
+    "cle_publique": <base64>,
+    "dernier_vu": <timestamp>,
+    "sauts_restants": <ttl>,
+    "via": <id du voisin direct qui te l'a rapporté>
+}
+
+Le champ "via" est important : il te dit par qui router un message vers cet id, sans avoir à choisir un relais au hasard.
+
+5b — Émission du gossip (nouveau thread, nouveau port UDP dédié, ex: 54321)
+
+Toutes les 3 secondes :
+
+Construis la liste de tout ce que tu peux rapporter : tes contacts directs (appareils_vus, avec leur clé publique déjà connue, TTL de départ = 3), plus les entrées de ta table_rencontres dont sauts_restants > 0 (avec leur TTL déjà décrémenté stocké tel quel).
+Choisis-en 3 maximum pour cette diffusion, en tournant à chaque cycle (garde par exemple un simple index qui avance et boucle sur la liste triée des ids connus, pour que tout le monde soit couvert au fil des cycles).
+Format du message, texte simple comme pour la découverte : mon_id;id1:timestamp1:ttl1:pubkey1;id2:...;id3:...
+5c — Réception du gossip
+
+Pour chaque entrée reçue (hors ton propre id) :
+
+Ignore si ttl (après décrémentation) tombe à 0 ou moins.
+Compare l'horodatage rapporté avec celui déjà stocké pour cet id (s'il existe) : si le nouveau est plus récent, remplace l'entrée entière (clé publique incluse), avec sauts_restants = ttl_reçu - 1 et via = mon_id de l'émetteur de ce paquet de gossip (le premier champ du message).
+Ne stocke rien pour un id déjà présent dans appareils_vus (l'info directe prime toujours sur l'info rapportée).
+5d — Nettoyage périodique
+
+Même logique que pour appareils_vus : un thread qui retire toute entrée de table_rencontres dont dernier_vu dépasse 1 minute.
+
+5e — Rendre la négociation de session relayable
+
+envoyer_cle_session doit pouvoir envoyer son paquet (type interne 1) soit directement (comme aujourd'hui), soit enveloppé en relais (type 3, type interne 1) si le destinataire n'est connu que via table_rencontres. Et côté réception, dans la branche "c'est pour moi" du case 3, il manque un case 1 dans le match interne (actuellement seul case 2 existe) — ajoute-le, en réutilisant la même logique que le case 1 du niveau supérieur (déchiffrement RSA, stockage dans sessions).
+
+5f — Décision automatique dans prepare_envoi
+
+Avant d'envoyer, détermine la route :
+
+Destinataire dans appareils_vus → direct, comme avant.
+Sinon, destinataire dans table_rencontres → utilise sa clé publique pour négocier une session (relayée via son champ "via", si ce voisin est toujours dans appareils_vus — sinon, best-effort, prends n'importe quel voisin direct actuel), puis envoie le message relayé de la même manière.
+Sinon → "Destinataire hors de portée", rien à envoyer.
+Ce que je veux voir
+L'émission du gossip avec rotation à 3 entrées
+La réception/fusion dans table_rencontres
+Le nouveau case 1 interne pour la session relayée
+La décision automatique dans prepare_envoi
+Test à faire toi-même (tu as les conditions réelles maintenant)
+
+Avec au moins 3 appareils dont un (D) jamais à portée directe d'un autre (A) : vérifie que D apparaît dans la table_rencontres de A après quelques cycles de gossip (avec sa clé publique), puis qu'un message envoyé depuis A vers D arrive, sans qu'A ait eu besoin de choisir un relais à la main.
+
+Tout est noté. Code quand tu es prêt, et montre-moi le résultat de tes tests en conditions réelles — ce sera la première fois qu'on valide le gossip sur du vrai WiFi plutôt qu'en local.
