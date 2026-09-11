@@ -255,6 +255,7 @@ dernier_vu = tm.time()
 appareils_vus = {} 
 sessions = {} 
 table_rencontre = {}
+index_rotation = 0
 #------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -310,7 +311,9 @@ def ecouter_table() :
                         continue
 
                     with verrou :
-                        if id_cible in appareils_vus or table_rencontre[id_cible]["dernier_vu"] < timestamp or id_cible == id_tempo:
+                        if  (id_cible in table_rencontre and table_rencontre[id_cible]["dernier_vu"]  > timestamp) :
+                            continue
+                        if (id_cible in appareils_vus) or (id_cible == id_tempo) :
                             continue
 
                         table_rencontre[id_cible] = {
@@ -354,26 +357,47 @@ def nettoyer_table_renconte() : # je ferai d'abord le plus simple avant de voir 
         print(e)
 
 def emission_table() :
-    global appareils_vus, mon_id
+    global appareils_vus, mon_id, index_rotation
     s = creer_sc()
     adresse = '<broadcast>'
     port_gossip = 54321
 
     while True :
         tm.sleep(3)
-        message_morceau = {}
+        candidat = []
 
         with verrou :
-            voisin_direct = list(appareils_vus.keys())
             id_tempo = mon_id
+            indirect = dict(table_rencontre)
+            tout_appareils = dict(appareils_vus)
+
+        voisin_direct = []
+        for i in tout_appareils :
+            voisin_direct.append(i)
 
         if voisin_direct :
-            chaine_voisin_direct = ",".join(voisin_direct)
-            donnee_final = f"{id_tempo}|{chaine_voisin_direct}"
+            for i in voisin_direct :
+                morceau = f"{i}:{tm.time()}:3:{tout_appareils[i]['Clé_publique']}"
+                candidat.append(morceau)
 
+        if indirect :
+            for i, info in indirect.items() :
+                morceau = f"{i}:{info['dernier_vu']}:{info['saut_restant']}:{info['cle_pub_b64']}"
+                candidat.append(morceau)
+
+        if candidat :
+            candidat.sort()
+            n = len(candidat)
+            selection = []
+            for k in range(min(3, n)) :
+                indice = (index_rotation + k) % n 
+                selection.append(candidat[indice])
+                
+            index_rotation = (index_rotation + 3) % n
+            donnee_final = id_tempo + ";" + ";".join(selection)
+            
         else :
-            donnee_final = f"{id_tempo}"
-
+            donnee_final = id_tempo
         try :
             s.sendto(donnee_final.encode("utf-8"), (adresse, port_gossip))
                 
@@ -458,9 +482,12 @@ def construire_envellope_relais(destinataire_final, mon_propre_id, compteur, typ
 def prepare_envoi_relais(id_destinataire) :
     global table_rencontre, appareils_vus
     with verrou :
-        for voisin_direct , info in table_rencontre.items() :
-            if id_destinataire in info["voisin"] :
-                return voisin_direct
+        if id_destinataire not in table_rencontre :
+            return ""
+        via = table_rencontre[id_destinataire]["via"]
+        if (appareils_vus) and (via in appareils_vus) :
+            return via
+        return next(iter(appareils_vus))
 
     return ""
 
