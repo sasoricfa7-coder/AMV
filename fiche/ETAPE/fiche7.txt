@@ -1,0 +1,31 @@
+Fiche — Correctif : invalidation de session au redémarrage
+Objectif
+
+Détecter quand un pair a redémarré son programme, pour invalider automatiquement la session AES périmée que tu avais avec lui, plutôt que de continuer à lui envoyer des messages qu'il ne pourra jamais déchiffrer.
+
+Principe
+
+En plus de mon_id (stable, sauvegardé sur disque), génère au démarrage un numéro d'instance aléatoire, jamais sauvegardé — un simple secrets.token_hex(4) généré une fois en mémoire au lancement suffit. Ce numéro change à chaque redémarrage du programme, par construction.
+
+Étape 1 — Ajouter ce numéro au message de découverte
+
+Ton nom_final (utilisé par emettre()) doit inclure ce nouveau champ, par exemple en 5ème position : mon_id|nom|cle_publique_b64|port|numero_instance.
+
+Étape 2 — Stocker le dernier numéro d'instance connu par id
+
+Dans ecouter(), quand tu reçois une annonce, avant de mettre à jour appareils_vus[L[0]], vérifie si tu avais déjà une entrée pour cet id. Si oui, compare son ancien numéro d'instance (que tu devras stocker quelque part dans l'entrée, par exemple un champ "instance" dans le dictionnaire appareils_vus) avec le nouveau reçu.
+
+Étape 3 — Invalider la session si le numéro a changé
+
+Si le numéro d'instance a changé par rapport à celui que tu avais stocké → supprime immédiatement l'entrée correspondante dans sessions (si elle existe). Le prochain envoi vers cet id déclenchera automatiquement une nouvelle négociation, grâce à la logique if id_destinataire not in sessions que tu as déjà partout.
+
+Point de vigilance
+
+La toute première fois que tu vois un id (jamais rencontré avant), il n'y a rien à comparer — ne déclenche pas d'invalidation dans ce cas, contente-toi de stocker son numéro d'instance pour la prochaine comparaison.
+
+Ce que je veux voir
+Le nouveau champ dans nom_final et son extraction dans ecouter()
+La comparaison et l'invalidation conditionnelle de session
+Test à faire
+
+Avec deux instances (A et B) qui ont déjà échangé un message (donc une session existe entre elles) : relance B (arrête-le et relance-le, il va générer un nouveau numéro d'instance), puis vérifie que la session de A vers B a bien été supprimée automatiquement dès que la nouvelle annonce de B arrive, avant même que tu n'envoies quoi que ce soit.
