@@ -90,7 +90,7 @@ def traiter_cas_message(id_destinataire, reste) :
     with verrou :
         nom = appareils_vus.get(id_destinataire, {}).get("nom", "Inconnu")
         if id_destinataire not in sessions :
-            print("Pas de clé de session {id_destinataire}")
+            print(f"Pas de clé de session {id_destinataire}")
             return
         cle = sessions[id_destinataire]
     texte = dechiffrer_message((reste[:12]), (reste[12:]), cle )
@@ -155,6 +155,7 @@ def ecouter_tcp() :
 
                     if compteur <= 1 :
                         print("[Routage] Message jeté (TTL expiré)")
+                        connexion.close()
                         continue
 
                     compteur -= 1
@@ -164,6 +165,7 @@ def ecouter_tcp() :
                         with verrou :
                             if id_relais == "" or id_relais not in appareils_vus :
                                 print("[Routage] Destinataire hors de portée.")
+                                connexion.close()
                                 continue
                             ip = appareils_vus[id_relais]["ip"]
                             port = int(appareils_vus[id_relais]["port"])
@@ -175,6 +177,7 @@ def ecouter_tcp() :
 
                         if not valide :
                             print("Echec d'envoie")
+                            connexion.close()
                             continue
 
     #produit_final = type_indication + destinataire_final + mon_propre_id + compteur + type_message + message_chiffrer
@@ -194,44 +197,61 @@ def ecouter_tcp() :
             print(e)
 
 def envoyer_cle_session(id_destinataire) :
-    global appareils_vus, sessions
+    global appareils_vus, sessions, table_rencontre
 
-    #with verrou : ca sera à son appel qu'on met le verrou
-    info_appareil = appareils_vus[id_destinataire]
-        
-    ip_dest = info_appareil["ip"]
-    cle_pub_b64 = info_appareil["Clé_publique"]
-    port_dest = int(info_appareil["port"])
+    with verrou :
+        if id_destinataire in appareils_vus :
+            cle_public = appareils_vus[id_destinataire] ["Clé_publique"]
+            direct = True
+        elif id_destinataire in table_rencontre :
+            cle_public = table_rencontre[id_destinataire]["cle_pub_b64"]
+            direct = False
+        else : 
+            print("Le destinataire n'est pas en ligne.")
+            return
 
     # 1. Génération de la clé AES aléatoire
     cle_aes = sr.token_bytes(32)
-    
-    # 2. Chiffrement de la clé AES avec la clé publique RSA du destinataire
-    cle_aes_chiffree = chiffrer_aes(cle_aes, cle_pub_b64)
-    
-    try :
         
-        # 4. Envoi de la taille puis du message complet
-        id_coder = mon_id.encode("utf-8")
-        message = (b'\x01') + id_coder + cle_aes_chiffree
+    # 2. Chiffrement de la clé AES avec la clé publique RSA du destinataire
+    cle_aes_chiffree = chiffrer_aes(cle_aes, cle_public)
+
+    paquet_interne = b'\x01' + mon_id.encode("utf-8") + cle_aes_chiffree
+
+    if direct == True :
+        message = paquet_interne
+        with verrou :
+            ip_dest = appareils_vus[id_destinataire] ["ip"]
+            port_dest = int(appareils_vus[id_destinataire]["port"])
         taille_message = len(message)
         taille_message_bytes = taille_message.to_bytes(4, 'big')
 
         valide = envoi_tout(port_dest, ip_dest, taille_message_bytes, message)
 
-        if valide :
-            # 5. Stockage local de la clé AES dans les sessions
-            #with verrou :  ca sera à son appel qu'on met le verrou
-            sessions[id_destinataire] = cle_aes
+    else :
+        id_relais = prepare_envoi_relais(id_destinataire)
+        if id_relais == "" :
+            print("Destinataire hors ligne.")
+            return
+        message = construire_envellope_relais(id_destinataire, mon_id, 3, 1, paquet_interne)
             
-            print(f"\n[TCP] Clé AES générée et envoyée avec succès à {info_appareil['nom']} ({ip_dest}:{port_dest}) !")
-            print(f"\n Clé : {cle_aes.hex()}")
-            return valide
-        else :
-            return valide 
+        with verrou :
+            ip_dest = appareils_vus[id_relais]["ip"]
+            port_dest = int(appareils_vus[id_relais]["port"])
+        taille_message = len(message)
+        taille_message_bytes = taille_message.to_bytes(4, 'big')
+
+        valide = envoi_tout(port_dest, ip_dest, taille_message_bytes, message)
+
+    if valide != False :
+        with verrou :
+            sessions[id_destinataire] = cle_aes
+        print(f"Clé AES envoyée à {id_destinataire}")
+    else :
+        print("Echec d'envoi")
+    return valide
+            
         
-    except Exception as e :
-        print(f"\n[Erreur TCP] Impossible d'envoyer la clé : {e}")
 
 
 #-----------------------------------------------------------------------------------------------------------------------------
@@ -487,9 +507,10 @@ def prepare_envoi_relais(id_destinataire) :
         via = table_rencontre[id_destinataire]["via"]
         if (appareils_vus) and (via in appareils_vus) :
             return via
+        if not appareils_vus :
+            return ""
         return next(iter(appareils_vus))
 
-    return ""
 
 def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
     global appareils_vus, sessions, mon_id
@@ -503,47 +524,72 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
         print("Message invalide")
         message = input("Entrez votre message : ").strip()
 
-    with verrou :
-        if id_destinataire not in sessions :
-            valide = envoyer_cle_session(id_destinataire)
-    if not valide :
-        print("Echec")
-        return
-
-    with verrou :
-        cle = sessions[id_destinataire]
-
-    nonce, texte = chiffrer_message(message, cle)
-    message_chiffrer = nonce + texte
-    type_pour_guider = b""
-
+    # --- 1. Décider la route ---
     with verrou :
         if id_destinataire == mon_id :
             print(f"{message}")
             return
-            
-        if id_destinataire not in appareils_vus :
-            id_relais = prepare_envoi_relais(id_destinataire)
-            if id_relais == "" :
-                print("Destinataire hors de porté.")
-                return
-            compteur = 3
-            type_message = 2
-            tout = construire_envellope_relais(id_destinataire, mon_id, compteur, type_message, message_chiffrer)
-
+        if id_destinataire in appareils_vus :
+            route = "direct"
+        elif id_destinataire in table_rencontre :
+            route = "relais"
         else :
-            type_pour_guider = b"\x02"
-            tout = type_pour_guider + mon_id.encode("utf-8") + message_chiffrer
-            
-        ip = appareils_vus[id_destinataire]["ip"]
-        port = int(appareils_vus[id_destinataire]["port"])
-
-    taille = renvoi_taille(tout)
-    valide = envoi_tout(port, ip, taille , tout)
-
-    if not valide :
-        print("Echec")
+            route = "inconnu"
+    if route == "inconnu" :
+        print("Destinataire hors de portée.")
         return
+
+    # --- 2. Négociation de session si besoin (HORS verrou) ---
+    with verrou :
+        besoin = id_destinataire not in sessions
+    if besoin :
+        valide = envoyer_cle_session(id_destinataire)
+        if not valide :
+            print("Échec de la négociation de session")
+            return
+
+    # --- 3. Récupérer la clé AES ---
+    with verrou :
+        cle = sessions[id_destinataire]
+
+    # --- 4. Chiffrer le message ---
+    nonce, texte = chiffrer_message(message, cle)  
+    message_chiffrer = nonce + texte
+
+    # --- 5. Construire le paquet final ---
+    if route == "direct" :
+        tout = b'\x02' + mon_id.encode("utf-8") + message_chiffrer # ici pourquoi on n'a pas encoder message ??
+        id_choisi = id_destinataire
+    else :
+        id_relais = prepare_envoi_relais(id_destinataire)
+        if not id_relais :
+            print("Aucun relais disponible")
+            return
+        tout = construire_envellope_relais(id_destinataire, mon_id, 3, 2, message_chiffrer)
+        id_choisi = id_relais
+
+    with verrou :
+        ip = appareils_vus[id_choisi]["ip"]
+        port =int(appareils_vus[id_choisi]["port"])
+
+    # --- 6. Envoyer ---
+    taille = renvoi_taille(tout)
+    valide = envoi_tout(port, ip, taille, tout)
+    if not valide :
+        print("Échec d'envoi")
+        return
+
+
+
+
+
+
+
+
+
+
+
+
 
 def renvoi_taille(tout) : # Je vais le garder malgré et aussi les sous fonctions m'aident à mieux me repérer
     taille_message = len(tout)

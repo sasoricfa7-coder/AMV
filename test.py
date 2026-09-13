@@ -1,9 +1,5 @@
-
-a = "a"
-chaine = "a"
-
-while len(chaine) < 80 :
-    chaine += a
-
-print(chaine)
-print(len(chaine))
+test = ""
+if not test :
+    print("vide")
+else : 
+    print("Rempli")
