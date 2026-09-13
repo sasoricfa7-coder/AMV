@@ -233,7 +233,7 @@ def envoyer_cle_session(id_destinataire) :
         if id_relais == "" :
             print("Destinataire hors ligne.")
             return
-        message = construire_envellope_relais(id_destinataire, mon_id, 3, 1, paquet_interne)
+        message = construire_envellope_relais(id_destinataire, mon_id, 3, 1, cle_aes_chiffree)
             
         with verrou :
             ip_dest = appareils_vus[id_relais]["ip"]
