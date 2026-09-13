@@ -1,0 +1,192 @@
+ sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main ±  sudo ip netns exec nsA python3 etape1.py 55555
+[sudo] password for sasori:           
+Entrez votre nom d'affichage : A
+A
+
+--- MENU ---
+
+1. Afficher les appareils connectés
+2. Envoyer un message
+3. Nettoyer l'écran
+4. Quitter
+Votre choix : 1
+Aucun appareil détecté pour le moment.
+A
+
+--- MENU ---
+
+1. Afficher les appareils connectés
+2. Envoyer un message
+3. Nettoyer l'écran
+4. Quitter
+Votre choix : 1
+
+--- Appareils directs ---
+[DIRECT]   ID: 759f29d1302d7b88 | Nom: B | IP: 10.0.1.2 | Port: 55556
+A
+
+--- MENU ---
+
+1. Afficher les appareils connectés
+2. Envoyer un message
+3. Nettoyer l'écran
+4. Quitter
+Votre choix : 
+[TCP] Clé AES reçue avec succès de 4dab587a2018691d! Taille : 291 octets.
+
+ Clé : 0df8197cd5012cf52a4d4e4b00c1ef7049de00bf87c4953111ca205e37af3dc7
+
+ C : salut A c'est comment c'est C
+1
+
+--- Appareils directs ---
+[DIRECT]   ID: 759f29d1302d7b88 | Nom: B | IP: 10.0.1.2 | Port: 55556
+
+--- Contacts indirects (via gossip) ---
+[INDIRECT] ID: 4dab587a2018691d | Nom: C | TTL: 2 | via: 759f29d1302d7b88
+A
+
+--- MENU ---
+
+1. Afficher les appareils connectés
+2. Envoyer un message
+3. Nettoyer l'écran
+4. Quitter
+Votre choix : 2
+Entrez l'ID du destinaitaire : 4dab587a2018691d
+Info : le message doit être non vide et maximum 80 caractères
+Entrez votre message : Oui ça va C c'est A et toi ???
+A
+
+--- MENU ---
+
+1. Afficher les appareils connectés
+2. Envoyer un message
+3. Nettoyer l'écran
+4. Quitter
+Votre choix : 
+[TCP] Clé AES reçue avec succès de 759f29d1302d7b88 depuis 10.0.1.2 ! Taille : 273 octets.
+
+ Clé : 535d687deab44a8df70b55bc16912fa428e146fef109a1528500da0ddc4f91c5
+
+ B : B à A direct
+1
+
+--- Appareils directs ---
+[DIRECT]   ID: 759f29d1302d7b88 | Nom: B | IP: 10.0.1.2 | Port: 55556
+
+--- Contacts indirects (via gossip) ---
+[INDIRECT] ID: 4dab587a2018691d | Nom: C | TTL: 2 | via: 759f29d1302d7b88
+A
+
+--- MENU ---
+
+1. Afficher les appareils connectés
+2. Envoyer un message
+3. Nettoyer l'écran
+4. Quitter
+Votre choix : 4
+Fermeture du programme...
+ sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main ±  
+
+
+ sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV/test   main ±  sudo ip netns exec nsB python3 etape1.py 55556
+[sudo] password for sasori:           
+Entrez votre nom d'affichage : B
+B
+
+--- MENU ---
+
+1. Afficher les appareils connectés
+2. Envoyer un message
+3. Nettoyer l'écran
+4. Quitter
+Votre choix : 1
+
+--- Appareils directs ---
+[DIRECT]   ID: d07522d4e8820b51 | Nom: A | IP: 10.0.1.1 | Port: 55555
+B
+
+--- MENU ---
+
+1. Afficher les appareils connectés
+2. Envoyer un message
+3. Nettoyer l'écran
+4. Quitter
+Votre choix : 1
+
+--- Appareils directs ---
+[DIRECT]   ID: d07522d4e8820b51 | Nom: A | IP: 10.0.1.1 | Port: 55555
+[DIRECT]   ID: 4dab587a2018691d | Nom: C | IP: 10.0.1.3 | Port: 55557
+B
+
+--- MENU ---
+
+1. Afficher les appareils connectés
+2. Envoyer un message
+3. Nettoyer l'écran
+4. Quitter
+Votre choix : 2
+Entrez l'ID du destinaitaire : d07522d4e8820b51
+Info : le message doit être non vide et maximum 80 caractères
+Entrez votre message : B à jhernjgejrtsjortshoijrthoijrtshjortshotrshjotrhijorhojshoi,bhsnibyoij ehjo m eijo (eu(y
+Message invalide
+Entrez votre message : B à A direct
+Clé AES envoyée à d07522d4e8820b51
+B
+
+--- MENU ---
+
+1. Afficher les appareils connectés
+2. Envoyer un message
+3. Nettoyer l'écran
+4. Quitter
+Votre choix : 4
+Fermeture du programme...
+ sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV/test   main ±  
+
+
+ sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV/test/test   main ±  sudo ip netns exec nsC python3 etape1.py 55557
+[sudo] password for sasori:           
+Entrez votre nom d'affichage : C
+C
+
+--- MENU ---
+
+1. Afficher les appareils connectés
+2. Envoyer un message
+3. Nettoyer l'écran
+4. Quitter
+Votre choix : 1
+
+--- Appareils directs ---
+[DIRECT]   ID: 759f29d1302d7b88 | Nom: B | IP: 10.0.1.2 | Port: 55556
+
+--- Contacts indirects (via gossip) ---
+[INDIRECT] ID: d07522d4e8820b51 | Nom: A | TTL: 2 | via: 759f29d1302d7b88
+C
+
+--- MENU ---
+
+1. Afficher les appareils connectés
+2. Envoyer un message
+3. Nettoyer l'écran
+4. Quitter
+Votre choix : 2
+Entrez l'ID du destinaitaire : d07522d4e8820b51
+Info : le message doit être non vide et maximum 80 caractères
+Entrez votre message : salut A c'est comment c'est C
+Clé AES envoyée à d07522d4e8820b51
+C
+
+--- MENU ---
+
+1. Afficher les appareils connectés
+2. Envoyer un message
+3. Nettoyer l'écran
+4. Quitter
+Votre choix : 
+ A : Oui ça va C c'est A et toi ???
+4
+Fermeture du programme...
+ sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV/test/test   main ±  

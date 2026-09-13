@@ -86,9 +86,15 @@ def chiffrer_aes(cle_aes, cle_publique_b64) :
     return cle_chiffree
 
 def traiter_cas_message(id_destinataire, reste) :
-    global appareils_vus, sessions
+    global appareils_vus, sessions, table_rencontre
     with verrou :
-        nom = appareils_vus.get(id_destinataire, {}).get("nom", "Inconnu")
+        if id_destinataire in appareils_vus :
+            nom = appareils_vus[id_destinataire]["nom"]
+        elif id_destinataire in table_rencontre :
+            nom = table_rencontre[id_destinataire]["nom"]
+        else :
+            nom = "Inconnu"
+
         if id_destinataire not in sessions :
             print(f"Pas de clé de session {id_destinataire}")
             return
@@ -161,14 +167,23 @@ def ecouter_tcp() :
                     compteur -= 1
                     
                     if id_destinataire != id_tempo :
-                        id_relais = prepare_envoi_relais(id_destinataire)
+
+                        # Étape 1 : est-ce que je connais le destinataire en direct ?
                         with verrou :
-                            if id_relais == "" or id_relais not in appareils_vus :
-                                print("[Routage] Destinataire hors de portée.")
-                                connexion.close()
-                                continue
-                            ip = appareils_vus[id_relais]["ip"]
-                            port = int(appareils_vus[id_relais]["port"])
+                            direct = id_destinataire in appareils_vus
+                            if direct :
+                                ip = appareils_vus[id_destinataire]["ip"]
+                                port = int(appareils_vus[id_destinataire]["port"])
+
+                        if not direct :                    
+                            id_relais = prepare_envoi_relais(id_destinataire)
+                            with verrou :
+                                if id_relais == "" or id_relais not in appareils_vus :
+                                    print("[Routage] Destinataire hors de portée.")
+                                    connexion.close()
+                                    continue
+                                ip = appareils_vus[id_relais]["ip"]
+                                port = int(appareils_vus[id_relais]["port"])
 
 
                         tout = construire_envellope_relais(id_destinataire, id_emeteur, compteur, type_message, reste)
@@ -322,11 +337,16 @@ def ecouter_table() :
                 entrees = L[1:]
 
                 for i in entrees :
-                    morceau = i.split(":")
+                    morceau = i.split(":", 4)
+                    
+                    if len(morceau) < 5 :
+                        continue
+                        
                     id_cible = morceau[0]
                     timestamp = float(morceau[1])
                     ttl = int(morceau[2]) - 1
                     cle_pub_b64 = morceau[3]
+                    nom_cible = morceau[4]
                     if ttl <= 0 :
                         continue
 
@@ -340,7 +360,8 @@ def ecouter_table() :
                             "cle_pub_b64" : cle_pub_b64 ,
                             "dernier_vu" : timestamp,
                             "saut_restant" : ttl,
-                            "via" : id_emeteur
+                            "nom"         : nom_cible,
+                            "via" : id_emeteur,
                         } 
 
         except Exception as e :
@@ -397,12 +418,12 @@ def emission_table() :
 
         if voisin_direct :
             for i in voisin_direct :
-                morceau = f"{i}:{tm.time()}:3:{tout_appareils[i]['Clé_publique']}"
+                morceau = f"{i}:{tm.time()}:3:{tout_appareils[i]['Clé_publique']}:{tout_appareils[i]['nom']}"
                 candidat.append(morceau)
 
         if indirect :
             for i, info in indirect.items() :
-                morceau = f"{i}:{info['dernier_vu']}:{info['saut_restant']}:{info['cle_pub_b64']}"
+                morceau = f"{i}:{info['dernier_vu']}:{info['saut_restant']}:{info['cle_pub_b64']}:{info['nom']}"
                 candidat.append(morceau)
 
         if candidat :
@@ -579,18 +600,6 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
         print("Échec d'envoi")
         return
 
-
-
-
-
-
-
-
-
-
-
-
-
 def renvoi_taille(tout) : # Je vais le garder malgré et aussi les sous fonctions m'aident à mieux me repérer
     taille_message = len(tout)
     taille_message_bytes = taille_message.to_bytes(4, 'big')
@@ -605,6 +614,25 @@ def affichage() :
     print("3. Nettoyer l'écran")
     print("4. Quitter")
 
+def menu() :
+    global appareils_vus , table_rencontre
+    with verrou :
+        direct = dict(appareils_vus)
+        indirect = dict(table_rencontre)
+
+    if not direct and not indirect :
+        print("Aucun appareil détecté pour le moment.")
+        return
+    else :
+        if direct :
+            print("\n--- Appareils directs ---")
+            for identifiant, info in direct.items() :
+                print(f"[DIRECT]   ID: {identifiant} | Nom: {info['nom']} | IP: {info['ip']} | Port: {info['port']}")
+        if indirect :
+            print("\n--- Contacts indirects (via gossip) ---")
+            for identifiant, info in indirect.items() :
+                print(f"[INDIRECT] ID: {identifiant} | Nom: {info['nom']} | TTL: {info['saut_restant']} | via: {info['via']}")
+        
 
 def main():
     les_ouvriers()
@@ -617,12 +645,7 @@ def main():
 
         match choix :
             case "1" :
-                with verrou :
-                    if not appareils_vus :
-                        print("Aucun appareil détecté pour le moment.")
-                    else :
-                        for identifiant, info in appareils_vus.items() :
-                            print(f"ID: {identifiant} | Nom: {info['nom']} | IP: {info['ip']} | Port: {info['port']}")
+                menu()
 
             case "2" :
                 prepare_envoi()

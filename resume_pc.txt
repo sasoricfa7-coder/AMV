@@ -1,0 +1,271 @@
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  inxi -F
+System:
+  Host: sasori-HP-Laptop-15-dw1xxx Kernel: 7.0.0-31-generic arch: x86_64
+    bits: 64
+  Desktop: Openbox v: 3.6.1 Distro: Zorin OS 18.1 noble
+Machine:
+  Type: Laptop System: HP product: HP Laptop 15-dw1xxx v: Type1ProductConfigId
+    serial: <superuser required>
+  Mobo: HP model: 85F5 v: 39.43 serial: <superuser required> UEFI: Insyde
+    v: F.57 date: 09/19/2022
+Battery:
+  ID-1: BAT1 charge: 31.6 Wh (99.4%) condition: 31.8/41.0 Wh (77.4%)
+CPU:
+  Info: quad core model: Intel Celeron N4120 bits: 64 type: MCP cache:
+    L2: 4 MiB
+  Speed (MHz): avg: 2125 min/max: 800/2600 cores: 1: 2324 2: 1593 3: 2224
+    4: 2360
+Graphics:
+  Device-1: Intel GeminiLake [UHD Graphics 600] driver: i915 v: kernel
+  Device-2: Quanta HP TrueVision HD Camera driver: uvcvideo type: USB
+  Display: server: X.Org v: 21.1.11 driver: X: loaded: modesetting
+    unloaded: fbdev,vesa dri: iris gpu: i915 resolution: 1366x768~60Hz
+  API: EGL v: 1.5 drivers: iris,swrast platforms: gbm,x11,surfaceless,device
+  API: OpenGL v: 4.6 compat-v: 4.5 vendor: intel mesa
+    v: 25.2.8-0ubuntu0.24.04.2 renderer: Mesa Intel UHD Graphics 600 (GLK 2)
+Audio:
+  Device-1: Intel Celeron/Pentium Silver Processor High Definition Audio
+    driver: snd_hda_intel
+  API: ALSA v: k7.0.0-31-generic status: kernel-api
+  Server-1: PipeWire v: 1.0.5 status: active
+Network:
+  Device-1: Realtek RTL8111/8168/8211/8411 PCI Express Gigabit Ethernet
+    driver: r8169
+  IF: eno1 state: down mac: 7c:57:58:d3:f0:61
+  Device-2: Realtek RTL8821CE 802.11ac PCIe Wireless Network Adapter
+    driver: rtw88_8821ce
+  IF: wlo1 state: up mac: bc:f4:d4:20:6a:c7
+  IF-ID-1: docker0 state: down mac: f6:6b:19:4f:77:84
+  IF-ID-2: lxcbr0 state: down mac: 00:16:3e:00:00:00
+  IF-ID-3: virbr0 state: down mac: 52:54:00:6b:86:2c
+Bluetooth:
+  Device-1: Realtek Bluetooth 4.2 Adapter driver: btusb type: USB
+  Report: hciconfig ID: hci0 rfk-id: 1 state: down bt-service: disabled
+    rfk-block: hardware: no software: yes address: BC:F4:D4:20:6A:C8
+Drives:
+  Local Storage: total: 298.09 GiB used: 148.51 GiB (49.8%)
+  ID-1: /dev/sda vendor: Hitachi model: HTS543232L9A300 size: 298.09 GiB
+Partition:
+  ID-1: / size: 181.85 GiB used: 148.5 GiB (81.7%) fs: ext4 dev: /dev/sda2
+  ID-2: /boot/efi size: 1.05 GiB used: 7.2 MiB (0.7%) fs: vfat
+    dev: /dev/sda1
+Swap:
+  ID-1: swap-1 type: file size: 4 GiB used: 801.5 MiB (19.6%) file: /swapfile
+Sensors:
+  System Temperatures: cpu: 49.0 C mobo: N/A
+  Fan Speeds (rpm): N/A
+Info:
+  Memory: total: 4 GiB available: 3.64 GiB used: 1.51 GiB (41.5%)
+  Processes: 240 Uptime: 3h 10m Shell: Zsh inxi: 3.3.34
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  lscpu
+Architecture:                x86_64
+  CPU op-mode(s):            32-bit, 64-bit
+  Address sizes:             39 bits physical, 48 bits virtual
+  Byte Order:                Little Endian
+CPU(s):                      4
+  On-line CPU(s) list:       0-3
+Vendor ID:                   GenuineIntel
+  Model name:                Intel(R) Celeron(R) N4120 CPU @ 1.10GHz
+    CPU family:              6
+    Model:                   122
+    Thread(s) per core:      1
+    Core(s) per socket:      4
+    Socket(s):               1
+    Stepping:                8
+    CPU(s) scaling MHz:      80%
+    CPU max MHz:             2600.0000
+    CPU min MHz:             800.0000
+    BogoMIPS:                2188.80
+    Flags:                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse
+                             2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopolog
+                             y nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx est tm2 ssse3 sdbg 
+                             cx16 xtpr pdcm sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave rdrand lahf_lm 3dnowprefetc
+                             h cpuid_fault cat_l2 cdp_l2 ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fs
+                             gsbase tsc_adjust smep erms mpx rdt_a rdseed smap clflushopt intel_pt sha_ni xsaveopt xsavec xgetbv1 xsav
+                             es dtherm ida arat pln pts vnmi umip rdpid md_clear arch_capabilities
+Virtualization features:     
+  Virtualization:            VT-x
+Caches (sum of all):         
+  L1d:                       96 KiB (4 instances)
+  L1i:                       128 KiB (4 instances)
+  L2:                        4 MiB (1 instance)
+NUMA:                        
+  NUMA node(s):              1
+  NUMA node0 CPU(s):         0-3
+Vulnerabilities:             
+  Gather data sampling:      Not affected
+  Ghostwrite:                Not affected
+  Indirect target selection: Not affected
+  Itlb multihit:             Not affected
+  L1tf:                      Not affected
+  Mds:                       Not affected
+  Meltdown:                  Not affected
+  Mmio stale data:           Not affected
+  Old microcode:             Not affected
+  Reg file data sampling:    Mitigation; Clear Register File
+  Retbleed:                  Not affected
+  Spec rstack overflow:      Not affected
+  Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+  Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization
+  Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS Not affected; BHI SW loop, KVM SW lo
+                             op
+  Srbds:                     Not affected
+  Tsa:                       Not affected
+  Tsx async abort:           Not affected
+  Vmscape:                   Not affected
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  lscpu | grep "MHz"
+CPU(s) scaling MHz:                      68%
+CPU max MHz:                             2600.0000
+CPU min MHz:                             800.0000
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  free -h
+               total        used        free      shared  buff/cache   available
+Mem:           3.6Gi       1.5Gi       113Mi       190Mi       2.5Gi       2.2Gi
+Swap:          4.0Gi       899Mi       3.1Gi
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  sudo dmidecode -t memory | grep -E "Size|Type|Speed|Manufacturer"
+        Error Correction Type: None
+        Size: 4 GB
+        Type: DDR4
+        Type Detail: Synchronous
+        Speed: 2400 MT/s
+        Manufacturer: SK Hynix
+        Configured Memory Speed: 2400 MT/s
+        Size: No Module Installed
+        Type: DDR
+        Type Detail: Synchronous
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  lsblk -f
+NAME   FSTYPE   FSVER LABEL     UUID                                 FSAVAIL FSUSE% MOUNTPOINTS
+loop0  squashfs 4.0                                                        0   100% /snap/android-studio/241
+loop1  squashfs 4.0                                                        0   100% /snap/bare/5
+loop2  squashfs 4.0                                                        0   100% /snap/core18/2999
+loop3  squashfs 4.0                                                        0   100% /snap/android-studio/242
+loop4  squashfs 4.0                                                        0   100% /snap/core18/3084
+loop5  squashfs 4.0                                                        0   100% /snap/core20/2769
+loop6  squashfs 4.0                                                        0   100% /snap/core20/2866
+loop7  squashfs 4.0                                                        0   100% /snap/core22/2411
+loop8  squashfs 4.0                                                        0   100% /snap/core22/2437
+loop9  squashfs 4.0                                                        0   100% /snap/core24/1587
+loop10 squashfs 4.0                                                        0   100% /snap/core24/1643
+loop11 squashfs 4.0                                                        0   100% /snap/cups/1229
+loop12 squashfs 4.0                                                        0   100% /snap/cups/1238
+loop13 squashfs 4.0                                                        0   100% /snap/glow/90
+loop14 squashfs 4.0                                                        0   100% /snap/gnome-3-28-1804/198
+loop15 squashfs 4.0                                                        0   100% /snap/gnome-46-2404/153
+loop16 squashfs 4.0                                                        0   100% /snap/gtk-common-themes/1535
+loop17 squashfs 4.0                                                        0   100% /snap/mesa-2404/1165
+loop18 squashfs 4.0                                                        0   100% /snap/mesa-2404/1839
+loop19 squashfs 4.0                                                        0   100% /snap/ngrok/429
+loop20 squashfs 4.0                                                        0   100% /snap/onlyoffice-desktopeditors/1067
+loop21 squashfs 4.0                                                        0   100% /snap/onlyoffice-desktopeditors/1220
+loop22 squashfs 4.0                                                        0   100% /snap/snapd/27710
+loop23 squashfs 4.0                                                        0   100% /snap/snapd/27738
+loop24 squashfs 4.0                                                        0   100% /snap/whatsapp-linux-app/2
+sda                                                                                 
+├─sda1 vfat     FAT32           42FD-5D0F                                 1G     1% /boot/efi
+├─sda2 ext4     1.0             e4c1d758-27c6-4d55-a2f8-4d17c3ff826a     24G    82% /
+├─sda3 ext4     1.0             2b9dbfd1-12a5-4a4d-96f3-2aaaa7944c09                
+└─sda4 ext4     1.0   formation 0dc4380f-179e-4ffc-a2bf-a5790e716a83                
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  df -h
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs           373M  2.4M  370M   1% /run
+/dev/sda2       182G  149G   25G  87% /
+tmpfs           1.9G  114M  1.8G   7% /dev/shm
+tmpfs           5.0M     0  5.0M   0% /run/lock
+efivarfs         16E     0 -5.1K   0% /sys/firmware/efi/efivars
+tmpfs           1.9G     0  1.9G   0% /run/qemu
+tmpfs           373M  112K  373M   1% /run/user/1000
+/dev/sda1       1.1G  7.3M  1.1G   1% /boot/efi
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  lspci -k | grep -EA3 'VGA|3D|Display'
+00:02.0 VGA compatible controller: Intel Corporation GeminiLake [UHD Graphics 600] (rev 06)
+        Subsystem: Hewlett-Packard Company GeminiLake [UHD Graphics 600]
+        Kernel driver in use: i915
+        Kernel modules: i915
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host noprefixroute 
+       valid_lft forever preferred_lft forever
+2: eno1: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc fq_codel state DOWN group default qlen 1000
+    link/ether 7c:57:58:d3:f0:61 brd ff:ff:ff:ff:ff:ff
+    altname enp1s0
+3: wlo1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether bc:f4:d4:20:6a:c7 brd ff:ff:ff:ff:ff:ff
+    altname wlp2s0
+    inet 192.168.11.189/24 brd 192.168.11.255 scope global dynamic noprefixroute wlo1
+       valid_lft 76425sec preferred_lft 76425sec
+    inet6 fe80::b542:4581:5f58:5267/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+4: virbr0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default qlen 1000
+    link/ether 52:54:00:6b:86:2c brd ff:ff:ff:ff:ff:ff
+    inet 192.168.122.1/24 brd 192.168.122.255 scope global virbr0
+       valid_lft forever preferred_lft forever
+5: lxcbr0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default qlen 1000
+    link/ether 00:16:3e:00:00:00 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.3.1/24 brd 10.0.3.255 scope global lxcbr0
+       valid_lft forever preferred_lft forever
+6: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default 
+    link/ether f6:6b:19:4f:77:84 brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  sudo lshw -C network
+  *-network                 
+       description: Ethernet interface
+       product: RTL8111/8168/8211/8411 PCI Express Gigabit Ethernet Controller
+       vendor: Realtek Semiconductor Co., Ltd.
+       physical id: 0
+       bus info: pci@0000:01:00.0
+       logical name: eno1
+       version: 15
+       serial: 7c:57:58:d3:f0:61
+       capacity: 1Gbit/s
+       width: 64 bits
+       clock: 33MHz
+       capabilities: pm msi pciexpress msix bus_master cap_list ethernet physical tp mii 10bt 10bt-fd 100bt 100bt-fd 1000bt-fd autonegotiation
+       configuration: autonegotiation=on broadcast=yes driver=r8169 driverversion=7.0.0-31-generic firmware=rtl8168h-2_0.0.2 02/26/15 latency=0 link=no multicast=yes port=twisted pair
+       resources: irq:22 ioport:2000(size=256) memory:a1204000-a1204fff memory:a1200000-a1203fff
+  *-network
+       description: Wireless interface
+       product: RTL8821CE 802.11ac PCIe Wireless Network Adapter
+       vendor: Realtek Semiconductor Co., Ltd.
+       physical id: 0
+       bus info: pci@0000:02:00.0
+       logical name: wlo1
+       version: 00
+       serial: bc:f4:d4:20:6a:c7
+       width: 64 bits
+       clock: 33MHz
+       capabilities: pm msi pciexpress bus_master cap_list ethernet physical wireless
+       configuration: broadcast=yes driver=rtw88_8821ce driverversion=7.0.0-31-generic firmware=N/A ip=192.168.11.189 latency=0 link=yes multicast=yes wireless=IEEE 802.11
+       resources: irq:127 ioport:1000(size=256) memory:a1100000-a110ffff
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  nmcli device status
+DEVICE   TYPE      STATE                   CONNECTION             
+wlo1     wifi      connected               OUEDRAOGO ABOUBACAR-4G 
+lo       loopback  connected (externally)  lo                     
+docker0  bridge    connected (externally)  docker0                
+lxcbr0   bridge    connected (externally)  lxcbr0                 
+virbr0   bridge    connected (externally)  virbr0                 
+eno1     ethernet  unavailable             --                     
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  lsusb                                
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 001 Device 002: ID 0bda:b00a Realtek Semiconductor Corp. Realtek Bluetooth 4.2 Adapter
+Bus 001 Device 003: ID 0408:5365 Quanta Computer, Inc. HP TrueVision HD Camera
+Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  lspci
+00:00.0 Host bridge: Intel Corporation Gemini Lake Host Bridge (rev 06)
+00:00.1 Signal processing controller: Intel Corporation Celeron/Pentium Silver Processor Dynamic Platform and Thermal Framework Processor Participant (rev 06)
+00:00.3 System peripheral: Intel Corporation Celeron/Pentium Silver Processor Gaussian Mixture Model (rev 06)
+00:02.0 VGA compatible controller: Intel Corporation GeminiLake [UHD Graphics 600] (rev 06)
+00:0e.0 Audio device: Intel Corporation Celeron/Pentium Silver Processor High Definition Audio (rev 06)
+00:0f.0 Communication controller: Intel Corporation Celeron/Pentium Silver Processor Trusted Execution Engine Interface (rev 06)
+00:12.0 SATA controller: Intel Corporation Celeron/Pentium Silver Processor SATA Controller (rev 06)
+00:14.0 PCI bridge: Intel Corporation Gemini Lake PCI Express Root Port (rev f6)
+00:14.1 PCI bridge: Intel Corporation Gemini Lake PCI Express Root Port (rev f6)
+00:15.0 USB controller: Intel Corporation Celeron/Pentium Silver Processor USB 3.0 xHCI Controller (rev 06)
+00:17.0 Signal processing controller: Intel Corporation Celeron/Pentium Silver Processor I2C 4 (rev 06)
+00:17.1 Signal processing controller: Intel Corporation Celeron/Pentium Silver Processor I2C 5 (rev 06)
+00:1f.0 ISA bridge: Intel Corporation Celeron/Pentium Silver Processor LPC Controller (rev 06)
+00:1f.1 SMBus: Intel Corporation Celeron/Pentium Silver Processor Gaussian Mixture Model (rev 06)
+01:00.0 Ethernet controller: Realtek Semiconductor Co., Ltd. RTL8111/8168/8211/8411 PCI Express Gigabit Ethernet Controller (rev 15)
+02:00.0 Network controller: Realtek Semiconductor Co., Ltd. RTL8821CE 802.11ac PCIe Wireless Network Adapter
+(monenv)  sasori@sasori-HP-Laptop-15-dw1xxx  ~/0/AMV   main  
