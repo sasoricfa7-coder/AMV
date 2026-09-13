@@ -95,7 +95,7 @@ def traiter_cas_message(id_destinataire, reste) :
         else :
             nom = "Inconnu"
 
-        if id_destinataire not in sessions :
+        if not session_valide(id_destinataire) :
             print(f"Pas de clé de session {id_destinataire}")
             return
         cle = sessions[id_destinataire]
@@ -104,7 +104,7 @@ def traiter_cas_message(id_destinataire, reste) :
     print(f"\n {nom} : {texte}")
         
 def ecouter_tcp() :
-    global sessions, ma_cle_prive, port_optionnel, appareils_vus, mon_id
+    global sessions, ma_cle_prive, port_optionnel, appareils_vus, mon_id, sessions_instance
     s_tcp = sc.socket(sc.AF_INET, sc.SOCK_STREAM)
     s_tcp.setsockopt(sc.SOL_SOCKET, sc.SO_REUSEADDR, 1)
     s_tcp.bind(('', port_optionnel))
@@ -142,9 +142,12 @@ def ecouter_tcp() :
                 case 1 :
                     cle = dechiffrer_aes(reste, ma_cle_prive)
                     print(f"\n[TCP] Clé AES reçue avec succès de {id_destinataire} depuis {adresse[0]} ! Taille : {taille_message} octets.")
-                    print(f"\n Clé : {cle.hex()}")
                     with verrou :
                         sessions[id_destinataire] = cle
+                        sessions_instance[id_destinataire] = (
+                            appareils_vus.get(id_destinataire, {}).get("instance")
+                            or table_rencontre.get(id_destinataire, {}).get("instance")
+                        )   
 
                 case 2 :
                     traiter_cas_message(id_destinataire, reste)                    
@@ -203,7 +206,11 @@ def ecouter_tcp() :
                                 print(f"\n[TCP] Clé AES reçue avec succès de {id_emeteur}! Taille : {taille_message} octets.")
                                 print(f"\n Clé : {cle.hex()}")
                                 with verrou :
-                                    sessions[id_emeteur] = cle                                
+                                    sessions[id_emeteur] = cle      
+                                    sessions_instance[id_emeteur] = (
+                                        appareils_vus.get(id_emeteur, {}).get("instance")
+                                        or table_rencontre.get(id_emeteur, {}).get("instance")
+                                    )                         
                             case 2 :
                                 traiter_cas_message(id_emeteur, reste)
 
@@ -261,6 +268,10 @@ def envoyer_cle_session(id_destinataire) :
     if valide != False :
         with verrou :
             sessions[id_destinataire] = cle_aes
+            sessions_instance[id_destinataire] = (
+                appareils_vus.get(id_destinataire, {}).get("instance")
+                or table_rencontre.get(id_destinataire, {}).get("instance")
+            )
         print(f"Clé AES envoyée à {id_destinataire}")
     else :
         print("Echec d'envoi")
@@ -271,11 +282,14 @@ def envoyer_cle_session(id_destinataire) :
 
 #-----------------------------------------------------------------------------------------------------------------------------
 verrou = tr.Lock()
-nom = input("Entrez votre nom d'affichage : ")
-while nom == "" :
-    nom = input("Entrez votre nom d'affichage : ")
+
+nom = input("Entrez votre nom d'affichage : ").strip()
+while nom == "" or "|" in nom or ";" in nom or ":" in nom :
+    print("Nom invalide (pas de |, ; ou :).")
+    nom = input("Entrez votre nom d'affichage : ").strip()
     
 mon_id = sauvegarde_recharge()
+numero_instance = sr.token_hex(4)
 ma_cle_prive = generation_rsa()
 ma_cle_publique = ma_cle_prive.public_key()
 ma_cle_publique_b64 = transforme_base_64(ma_cle_publique)
@@ -284,18 +298,59 @@ port_optionnel = 55555
 if len(sys.argv) > 1 :
     port_optionnel = int(sys.argv[1])
 
-nom_final = mon_id + "|" + nom + "|" + ma_cle_publique_b64 + "|" + str(port_optionnel)
+nom_final = mon_id + "|" + nom + "|" + ma_cle_publique_b64 + "|" + str(port_optionnel) + "|" + numero_instance
 ip = None
 dernier_vu = tm.time()
 appareils_vus = {} 
 sessions = {} 
 table_rencontre = {}
+sessions_instance = {}
 index_rotation = 0
 #------------------------------------------------------------------------------------------------------------------------------
 
+def purge_19h() :
+    global appareils_vus, sessions, table_rencontre, sessions_instance, numero_instance, nom_final
+    t0 = tm.localtime()
+    derniere_purge = (t0.tm_year, t0.tm_mon, t0.tm_mday)
+    while True :
+        t = tm.localtime()
+        jour = (t.tm_year, t.tm_mon, t.tm_mday)
+        if t.tm_hour == 19 and derniere_purge != jour :
+            with verrou :
+                appareils_vus.clear()
+                sessions.clear()
+                table_rencontre.clear()
+                sessions_instance.clear()
+            derniere_purge = jour
+            numero_instance = sr.token_hex(4)
+            nom_final = mon_id + "|" + nom + "|" + ma_cle_publique_b64 + "|" + str(port_optionnel) + "|" + numero_instance
+            print("\n[Purge] 19h00 — tout a été réinitialisé.")
+        tm.sleep(20)
+
+def session_valide(id_cible) :
+    # ⚠️ À appeler SOUS verrou
+    if id_cible not in sessions :
+        return False
+
+    if id_cible in appareils_vus :
+        instance_actuelle = appareils_vus[id_cible].get("instance")
+    elif id_cible in table_rencontre :
+        instance_actuelle = table_rencontre[id_cible].get("instance")
+    else :
+        instance_actuelle = None
+
+    instance_stockee = sessions_instance.get(id_cible)
+
+    if instance_actuelle is not None and instance_stockee is not None and instance_actuelle != instance_stockee :
+        del sessions[id_cible]
+        if id_cible in sessions_instance :
+            del sessions_instance[id_cible]
+        return False
+
+    return True
 
 def ecouter() :
-    global appareils_vus, mon_id
+    global appareils_vus, mon_id, sessions, sessions_instance
     s_ecoute = creer_sc()
     s_ecoute.bind(('', 12345))
     while True :
@@ -303,15 +358,31 @@ def ecouter() :
             donnee, adresse_ip = s_ecoute.recvfrom(4096)
             donnee = donnee.decode("utf-8")
             L = donnee.split("|")
-            if len(L) >= 4 :
-                chaque_appareil = {"nom" : L[1], "ip" : adresse_ip[0], "Clé_publique" : L[2], "dernier_vu" : tm.time(), "port" : int(L[3])}
+            if len(L) >= 5 :
+                if L[0] == mon_id :
+                    continue
+                id_emeteur = L[0]
+                instance_recue = L[4]
+
                 with verrou :
-                    if L[0] == mon_id :
-                        continue
-                    appareils_vus[L[0]] = chaque_appareil 
+                    ancienne = sessions_instance.get(id_emeteur)
+                    if ancienne is not None and ancienne != instance_recue :
+                        if id_emeteur in sessions :
+                            del sessions[id_emeteur]
+                        del sessions_instance[id_emeteur]
+                        print(f"[Session] {id_emeteur} a redémarré, session invalidée")
+
+                    appareils_vus[id_emeteur] = {
+                        "nom" : L[1],
+                        "ip" : adresse_ip[0],
+                        "Clé_publique" : L[2],
+                        "dernier_vu" : tm.time(),
+                        "port" : int(L[3]),
+                        "instance" : instance_recue
+                    }
             else :
                 pass
-        except Exception as e  :
+        except Exception as e :
             print(e)
 
 def ecouter_table() :
@@ -337,9 +408,9 @@ def ecouter_table() :
                 entrees = L[1:]
 
                 for i in entrees :
-                    morceau = i.split(":", 4)
+                    morceau = i.split(":", 5)
                     
-                    if len(morceau) < 5 :
+                    if len(morceau) < 6 :
                         continue
                         
                     id_cible = morceau[0]
@@ -347,6 +418,7 @@ def ecouter_table() :
                     ttl = int(morceau[2]) - 1
                     cle_pub_b64 = morceau[3]
                     nom_cible = morceau[4]
+                    instance_cible = morceau[5]
                     if ttl <= 0 :
                         continue
 
@@ -362,6 +434,7 @@ def ecouter_table() :
                             "saut_restant" : ttl,
                             "nom"         : nom_cible,
                             "via" : id_emeteur,
+                            "instance"    : instance_cible,
                         } 
 
         except Exception as e :
@@ -382,6 +455,8 @@ def les_ouvriers() :
     ouvrier_ecouter_table.start()
     ouvrier_emmission_table = tr.Thread(target=emission_table, daemon=True)
     ouvrier_emmission_table.start()
+    ouvrier_purge = tr.Thread(target=purge_19h, daemon=True)
+    ouvrier_purge.start()
     
 def nettoyer_table_renconte() : # je ferai d'abord le plus simple avant de voir ecouter
     global table_rencontre
@@ -418,12 +493,12 @@ def emission_table() :
 
         if voisin_direct :
             for i in voisin_direct :
-                morceau = f"{i}:{tm.time()}:3:{tout_appareils[i]['Clé_publique']}:{tout_appareils[i]['nom']}"
+                morceau = f"{i}:{tm.time()}:3:{tout_appareils[i]['Clé_publique']}:{tout_appareils[i]['nom']}:{tout_appareils[i]['instance']}"
                 candidat.append(morceau)
 
         if indirect :
             for i, info in indirect.items() :
-                morceau = f"{i}:{info['dernier_vu']}:{info['saut_restant']}:{info['cle_pub_b64']}:{info['nom']}"
+                morceau = f"{i}:{info['dernier_vu']}:{info['saut_restant']}:{info['cle_pub_b64']}:{info['nom']}:{info['instance']}"
                 candidat.append(morceau)
 
         if candidat :
@@ -562,7 +637,7 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
 
     # --- 2. Négociation de session si besoin (HORS verrou) ---
     with verrou :
-        besoin = id_destinataire not in sessions
+        besoin = not session_valide(id_destinataire)
     if besoin :
         valide = envoyer_cle_session(id_destinataire)
         if not valide :
@@ -571,6 +646,9 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
 
     # --- 3. Récupérer la clé AES ---
     with verrou :
+        if id_destinataire not in sessions :
+            print("Session perdue entre-temps.")
+            return
         cle = sessions[id_destinataire]
 
     # --- 4. Chiffrer le message ---
@@ -590,8 +668,11 @@ def prepare_envoi() : # le but lui il doit s'assurer que tout est bon
         id_choisi = id_relais
 
     with verrou :
+        if id_choisi not in appareils_vus :
+            print("[Envoi] Destinataire disparu entre-temps.")
+            return
         ip = appareils_vus[id_choisi]["ip"]
-        port =int(appareils_vus[id_choisi]["port"])
+        port = int(appareils_vus[id_choisi]["port"])
 
     # --- 6. Envoyer ---
     taille = renvoi_taille(tout)
@@ -623,15 +704,15 @@ def menu() :
     if not direct and not indirect :
         print("Aucun appareil détecté pour le moment.")
         return
-    else :
-        if direct :
-            print("\n--- Appareils directs ---")
-            for identifiant, info in direct.items() :
-                print(f"[DIRECT]   ID: {identifiant} | Nom: {info['nom']} | IP: {info['ip']} | Port: {info['port']}")
-        if indirect :
-            print("\n--- Contacts indirects (via gossip) ---")
-            for identifiant, info in indirect.items() :
-                print(f"[INDIRECT] ID: {identifiant} | Nom: {info['nom']} | TTL: {info['saut_restant']} | via: {info['via']}")
+        
+    if direct :
+        print("\n--- Appareils directs ---")
+        for identifiant, info in direct.items() :
+            print(f"[DIRECT]   ID: {identifiant} | Nom: {info['nom']} | IP: {info['ip']} | Port: {info['port']}")
+    if indirect :
+        print("\n--- Contacts indirects (via gossip) ---")
+        for identifiant, info in indirect.items() :
+            print(f"[INDIRECT] ID: {identifiant} | Nom: {info['nom']} | TTL: {info['saut_restant']} | via: {info['via']}")
         
 
 def main():
